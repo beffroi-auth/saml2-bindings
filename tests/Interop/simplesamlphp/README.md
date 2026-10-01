@@ -15,10 +15,10 @@ sent, `PostSender` every form, `RedirectReceiver` reads every query string recei
 | | |
 |---|---|
 | `installation/` | SimpleSAMLphp as an identity provider and as a service provider in containers, copied from `saml2-model` (section 1) |
-| `harness.php` | what the two scripts share: the browser (curl, one cookie jar, one hop at a time), its reading of a page's form with PHP's HTML5 parser, the captures and the report |
+| `harness.php` | what the two scripts share: the installation's URLs, its test user and its login, over `../harness.php`, what every harness of section 9.5 shares, Keycloak's too: the browser (curl, one cookie jar, one hop at a time), its reading of a page's form with PHP's HTML5 parser, the reading of a query string as it arrived, the captures and the report |
 | `capture.php` | SimpleSAMLphp's two parties between themselves, every query string and form read by the package before it is kept (section 3) |
 | `exchange.php` | the package and SimpleSAMLphp both ways, login and logout, the probes and the measures (section 4) |
-| `measure.php`, `timing.php` | the measures of the captures, and the figure of section 9.6 (section 5) |
+| `../measure.php`, `timing.php` | the measures of the captures, shared with Keycloak's harness, and the figure of section 9.6 (section 5) |
 | `.castor/simplesamlphp.php`, at the root | `castor simplesamlphp`: every step above from one task |
 
 The judge was played on 1 October 2026: **green both ways**, on PHP 8.5.10 and on PHP 8.4.25, every probe refused by
@@ -140,7 +140,7 @@ docker run --rm --init --network saml2-bindings-simplesamlphp_default --user "$(
 
 # The measures and the figure
 docker run --rm -v "$PWD:/project:ro" -w /project ghcr.io/spomky-labs/phpqa:8.5 \
-    php tests/Interop/simplesamlphp/measure.php tests/Fixture/real 'simplesamlphp-*.txt'
+    php tests/Interop/measure.php tests/Fixture/real 'simplesamlphp-*.txt'
 docker run --rm -v "$PWD:/project:ro" -w /project ghcr.io/spomky-labs/phpqa:8.5 php tests/Interop/simplesamlphp/timing.php
 ```
 
@@ -286,7 +286,7 @@ those two fields only.
 
 ## 5. Measurements
 
-`measure.php` on the captures of `tests/Fixture/real/`, 1 October 2026 (section 2 has the command):
+`../measure.php` on the captures of `tests/Fixture/real/`, 1 October 2026 (section 2 has the command):
 
 | Query string | Bytes | Parameters | SigAlg | Escapes | RelayState, bytes | Signature, bytes | Inflated, bytes |
 |---|---|---|---|---|---|---|---|

@@ -45,7 +45,7 @@ require __DIR__ . '/harness.php';
 const DEFAULT_SP = SP . '/module.php/saml/sp/metadata/default-sp';
 const RETURN_TO = SP . '/module.php/core/welcome';
 
-$run = new Run(in_array('--keep', $argv, true) ? __DIR__ . '/../../Fixture/real' : __DIR__ . '/received');
+$run = simplesamlphp_run($argv);
 $clock = new SystemClock();
 
 /**
@@ -103,7 +103,7 @@ $login = $run->step(
             strlen((string) $received->relayState),
         ));
 
-        $form = $browser->get($url)->followWithin(IDP . '/')->logIn()->form('form of the response');
+        $form = log_in($browser->get($url)->followWithin(IDP . '/'))->form('form of the response');
         $body = $form->body();
         $response = new PostReceiver(SamlLoader::create())->response(BrowserForm::parsed($body));
         $assertion = $response->validate(

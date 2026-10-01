@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 /*
  * Prints, as Markdown tables, the measures of the query strings and forms of a directory that match a glob, for the
- * tables of tests/Interop/simplesamlphp/README.md and the bounds of section 7 of spec/bindings.md: their length, their
- * parameters or fields in order, the SigAlg and the escaping as sent, the length of the RelayState and of the
- * Signature once decoded, and the length of the message: for a query string, the smallest maxInflatedBytes under which
- * RedirectReceiver reads it, found by bisection, the package being the one inflater here; for a form, the characters of
- * its base64 text, the bound maxFormValueBytes reads, and whether a line break wraps it. saml2-model's measure.php, at
- * its commit 9c833c5, measured the XML; the package measures what carried it.
+ * tables of the READMEs of the harnesses of section 9.5 (simplesamlphp/, keycloak/) and the bounds of section 7 of
+ * spec/bindings.md: their length, their parameters or fields in order, the SigAlg and the escaping as sent, the length
+ * of the RelayState and of the Signature once decoded, and the length of the message: for a query string, the smallest
+ * maxInflatedBytes under which RedirectReceiver reads it, found by bisection, the package being the one inflater here;
+ * for a form, the characters of its base64 text, the bound maxFormValueBytes reads, and whether a line break wraps it.
+ * saml2-model's measure.php, at its commit 9c833c5, measured the XML; the package measures what carried it.
  *
  * From the root of the repository:
  *   docker run --rm -v "$PWD:/project:ro" -w /project ghcr.io/spomky-labs/phpqa:8.5 \
- *       php tests/Interop/simplesamlphp/measure.php tests/Fixture/real 'simplesamlphp-*.txt'
+ *       php tests/Interop/measure.php tests/Fixture/real 'simplesamlphp-*.txt'
+ * and 'keycloak-*.txt' for Keycloak's.
  */
 
 use Beffroi\Saml2\Bindings\BindingLimits;
@@ -22,7 +23,7 @@ use Beffroi\Saml2\Bindings\RedirectReceiver;
 use Beffroi\Saml2\Bindings\Tests\Support\BrowserForm;
 use Beffroi\Saml2\Model\SamlLoader;
 
-require __DIR__ . '/../../../vendor/autoload.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 $files = glob(rtrim($argv[1] ?? '.', '/') . '/' . ($argv[2] ?? '*.txt')) ?: [];
 sort($files);

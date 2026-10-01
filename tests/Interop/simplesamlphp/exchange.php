@@ -12,10 +12,10 @@ declare(strict_types=1);
  * where nothing listens: it intercepts every message addressed there. It is saml2-model's exchange.php, at its commit
  * 9c833c5, with every line that played the binding replaced by this package: RedirectSender writes every URL this
  * package sends, PostSender every form, RedirectReceiver reads every query string SimpleSAMLphp sends and PostReceiver
- * every form, read from the page by the harness (harness.php) and encoded as a browser does. No gzinflate(), no
+ * every form, read from the page by the harness (../harness.php) and encoded as a browser does. No gzinflate(), no
  * base64_decode(), no http_build_query() and no octets built by hand, except where a measure needs what the package
  * refuses to write (an RSA-SHA1 signature, a SigAlg off its list, a "+" in a signed RelayState): those are built in
- * signedByHand(), named so, and sent for the measure only.
+ * signed_by_hand() of ../harness.php, named so, and sent for the measure only.
  *
  * This package's metadata, both roles, written by the model's MetadataWriter, go to written/, from which the
  * installation reads them; what SimpleSAMLphp sent goes to received/, or to tests/Fixture/real/ with --keep, named
@@ -82,8 +82,6 @@ require __DIR__ . '/harness.php';
 
 const FOR_BINDINGS = SP . '/module.php/saml/sp/metadata/for-bindings';
 const SESSION = SP . '/session.php';
-// The SigAlg of RSA with SHA-512 as a query string carries it, for the probe that changes the SigAlg after signing.
-const RSA_SHA512_ENCODED = 'http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha512';
 
 /**
  * A service provider of this package facing SimpleSAMLphp's identity provider, and how that identity provider answers
@@ -255,7 +253,7 @@ final class Exchange
             strlen(split_url($url)[1]),
         ));
 
-        $form = $browser->followWithin(IDP . '/')->logIn()->form('form of the response');
+        $form = log_in($browser->followWithin(IDP . '/'))->form('form of the response');
         $value = (string) $form->field('SAMLResponse');
         $this->run->say(sprintf(
             'its form posts to %s the fields %s; SAMLResponse of %d characters, %s; RelayState %s',
@@ -263,7 +261,7 @@ final class Exchange
             implode(', ', $form->names()),
             strlen($value),
             preg_match('/[\r\n]/', $value) === 1 ? 'WRAPPED' : 'on one line',
-            $this->relayStateOf($form->field('RelayState'), $variant->loginRelayState),
+            relay_state_of($form->field('RelayState'), $variant->loginRelayState),
         ));
         if ($form->action !== $variant->acs()) {
             throw new RuntimeException(sprintf('the identity provider posts its response to %s', $form->action));
@@ -325,7 +323,7 @@ final class Exchange
                 implode(', ', $form->names()),
                 strlen($value),
                 preg_match('/[\r\n]/', $value) === 1 ? 'WRAPPED' : 'on one line',
-                $this->relayStateOf($form->field('RelayState'), $variant->logoutRelayState),
+                relay_state_of($form->field('RelayState'), $variant->logoutRelayState),
             ));
         } else {
             [$endpoint, $query] = split_url($browser->redirect('a redirect to the single logout service of ' . $variant->name));
@@ -336,7 +334,7 @@ final class Exchange
                 $variant->logoutSigned ? 'idp-logoutresponse-to-bindings-query' : 'idp-logoutresponse-to-bindings-unsigned-refused-query',
                 $query,
             );
-            $this->run->say(sprintf('its query string, %s; RelayState as sent %s', $this->described($query), $this->raw($query, 'RelayState') ?? 'absent'));
+            $this->run->say(sprintf('its query string, %s; RelayState as sent %s', query_described($query), query_value($query, 'RelayState') ?? 'absent'));
             $received = new RedirectReceiver(SamlLoader::create())->logoutMessage($query);
         }
         if (! $received instanceof ReceivedLogoutResponse) {
@@ -384,7 +382,7 @@ final class Exchange
         $genuine = $sender->authnRequest($this->authnRequestTo($idp, $variant), $this->signing('sp'), 'bindings-probe');
         $other = $sender->authnRequest($this->authnRequestTo($idp, $variant), null, 'bindings-probe');
         $this->accepted(new Browser()->get($genuine), IDP . '/module.php/core/loginuserpass', 'the genuine AuthnRequest');
-        foreach ($this->tampered($genuine, $other, 'SAMLRequest') as $what => $url) {
+        foreach (query_tampered($genuine, $other, 'SAMLRequest') as $what => $url) {
             $this->refused(new Browser()->get($url), 'an AuthnRequest ' . $what);
         }
     }
@@ -398,7 +396,7 @@ final class Exchange
         $sender = new RedirectSender();
         $genuine = $sender->logoutRequest($this->logoutRequestTo($idp, $variant, $accepted), $this->signing('sp'), 'bindings-probe');
         $other = $sender->logoutRequest($this->logoutRequestTo($idp, $variant, $accepted), $this->signing('sp'), 'bindings-probe');
-        foreach ($this->tampered($genuine, $other, 'SAMLRequest') as $what => $url) {
+        foreach (query_tampered($genuine, $other, 'SAMLRequest') as $what => $url) {
             $this->refused($browser->get($url), 'a LogoutRequest ' . $what);
         }
     }
@@ -436,7 +434,7 @@ final class Exchange
             $accepted->request->id,
             $accepted->authentication->name,
             $accepted->request->issueInstant->format('Y-m-d\TH:i:s\Z'),
-            $this->described($query),
+            query_described($query),
             strlen((string) $received->relayState),
             $accepted->assertionConsumerService->location,
         ));
@@ -505,7 +503,7 @@ final class Exchange
             $accepted->request->id,
             $accepted->authentication->name,
             $accepted->request->issueInstant->format('Y-m-d\TH:i:s\Z'),
-            $this->described($query),
+            query_described($query),
             strlen((string) $received->relayState),
         ));
         // What heidi/saml does with it (section 6.8): the session it names is the one this package opened.
@@ -520,7 +518,7 @@ final class Exchange
         $answer = $sender->logoutResponse($this->logoutResponseTo($accepted->request, $sp), $this->signing('idp'), $received->relayState);
         if ($probes) {
             $other = $sender->logoutResponse($this->logoutResponseTo($accepted->request, $sp), $this->signing('idp'), $received->relayState);
-            foreach ($this->tampered($answer, $other, 'SAMLResponse') as $what => $tampered) {
+            foreach (query_tampered($answer, $other, 'SAMLResponse') as $what => $tampered) {
                 $this->refused($browser->get($tampered), 'a LogoutResponse ' . $what);
             }
         }
@@ -561,7 +559,10 @@ final class Exchange
             ['http://www.w3.org/2001/04/xmldsig-more#rsa-sha224', OPENSSL_ALGO_SHA224, 'RSA with SHA-224'],
             ['urn:example:unknown-signature-algorithm', OPENSSL_ALGO_SHA256, 'RSA with SHA-256, under an unknown URI'],
         ] as [$uri, $digest, $how]) {
-            $this->outcome(new Browser()->get($this->signedByHand($unsigned, $uri, $digest)), sprintf('SigAlg %s, %s, signed by hand', $uri, $how));
+            $this->outcome(
+                new Browser()->get(signed_by_hand($unsigned, $uri, $digest, $this->pem('sp-signing-key.pem'))),
+                sprintf('SigAlg %s, %s, signed by hand', $uri, $how),
+            );
         }
     }
 
@@ -574,13 +575,18 @@ final class Exchange
         $browser = new Browser();
         $sender = new RedirectSender();
         $url = $sender->authnRequest($this->authnRequestTo($idp, $variant), $this->signing('sp'), 'a b');
-        $form = $browser->get($url)->followWithin(IDP . '/')->logIn()->form('form of the response');
+        $form = log_in($browser->get($url)->followWithin(IDP . '/'))->form('form of the response');
         $this->run->say(sprintf(
             'RelayState "a%%20b", as RedirectSender writes "a b": the identity provider echoes %s',
             var_export($form->field('RelayState'), true),
         ));
         $unsigned = $sender->authnRequest($this->authnRequestTo($idp, $variant), null, 'a b');
-        $plus = $this->signedByHand(str_replace('RelayState=a%20b', 'RelayState=a+b', $unsigned), SignatureAlgorithm::RsaSha256->value, OPENSSL_ALGO_SHA256);
+        $plus = signed_by_hand(
+            str_replace('RelayState=a%20b', 'RelayState=a+b', $unsigned),
+            SignatureAlgorithm::RsaSha256->value,
+            OPENSSL_ALGO_SHA256,
+            $this->pem('sp-signing-key.pem'),
+        );
         $browser->get($plus)->followWithin(IDP . '/');
         $form = $browser->status === 200 ? Form::of($browser->body, $browser->url) : null;
         $this->run->say(sprintf(
@@ -607,7 +613,7 @@ final class Exchange
                 continue;
             }
             [, $query] = split_url((string) $browser->location);
-            $raw = $this->raw($query, 'RelayState');
+            $raw = query_value($query, 'RelayState');
             try {
                 $received = new RedirectReceiver(SamlLoader::create())->authnRequest($query);
                 $outcome = sprintf('RedirectReceiver read it, RelayState %s', $received->relayState === null ? 'absent' : strlen($received->relayState) . ' bytes');
@@ -622,126 +628,6 @@ final class Exchange
                 $outcome,
             ));
         }
-    }
-
-    /**
-     * The four changes of a query string this package signed, by name: its RelayState, its SigAlg, its message, taken
-     * from another URL of this package, and its signature removed.
-     *
-     * @return array<string, string>
-     */
-    private function tampered(string $genuine, string $other, string $parameter): array
-    {
-        [$endpoint, $query] = split_url($genuine);
-        $message = $this->raw(split_url($other)[1], $parameter) ?? throw new LogicException('the other URL carries its message');
-
-        return [
-            'whose RelayState was changed after signing' => $endpoint . '?' . $this->replaced($query, 'RelayState', 'bindings-proof'),
-            'whose SigAlg was changed after signing, RSA-SHA256 to RSA-SHA512' => $endpoint . '?' . $this->replaced($query, 'SigAlg', RSA_SHA512_ENCODED),
-            'whose message was changed after signing, another of this package' => $endpoint . '?' . $this->replaced($query, $parameter, $message),
-            'whose Signature and SigAlg were removed' => $endpoint . '?' . $this->replaced($this->replaced($query, 'Signature', null), 'SigAlg', null),
-        ];
-    }
-
-    /**
-     * $query with the raw value of $name replaced, or the parameter removed when $value is null.
-     */
-    private function replaced(string $query, string $name, ?string $value): string
-    {
-        $parameters = [];
-        foreach (explode('&', $query) as $parameter) {
-            if (! str_starts_with($parameter, $name . '=')) {
-                $parameters[] = $parameter;
-            } elseif ($value !== null) {
-                $parameters[] = $name . '=' . $value;
-            }
-        }
-
-        return implode('&', $parameters);
-    }
-
-    /**
-     * The raw value of $name in $query, still percent-encoded, or null.
-     */
-    private function raw(string $query, string $name): ?string
-    {
-        foreach (explode('&', $query) as $parameter) {
-            if (str_starts_with($parameter, $name . '=')) {
-                return substr($parameter, strlen($name) + 1);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * What a query string SimpleSAMLphp sent is made of: its length, its parameters in order, its SigAlg as sent, its
-     * escaping.
-     */
-    private function described(string $query): string
-    {
-        return sprintf(
-            '%d bytes: parameters %s; SigAlg %s; %s',
-            strlen($query),
-            implode(', ', $this->names($query)),
-            $this->raw($query, 'SigAlg') ?? 'absent',
-            $this->escaping($query),
-        );
-    }
-
-    /**
-     * The names of the parameters of $query, in their order.
-     *
-     * @return list<string>
-     */
-    private function names(string $query): array
-    {
-        return array_map(static fn (string $parameter): string => explode('=', $parameter, 2)[0], explode('&', $query));
-    }
-
-    /**
-     * How $query escapes: the case of its hexadecimal digits, and its "+" and "%20".
-     */
-    private function escaping(string $query): string
-    {
-        $lower = preg_match_all('/%(?:[0-9a-f][a-f]|[a-f][0-9a-f])/', $query);
-        $upper = preg_match_all('/%[0-9A-F]{2}/', $query);
-
-        return sprintf(
-            '%d escapes, %s, %d "+", %d "%%20", %d "%%7E"',
-            $upper + $lower,
-            $lower === 0 ? 'uppercase hexadecimal only' : $lower . ' in lowercase',
-            substr_count($query, '+'),
-            substr_count($query, '%20'),
-            substr_count($query, '%7E'),
-        );
-    }
-
-    /**
-     * For the measures only: the unsigned query string RedirectSender wrote, then "&SigAlg=" and $uri, signed by hand
-     * with the service provider's test key and $digest, then "&Signature=": what the package refuses to write.
-     */
-    private function signedByHand(string $unsigned, string $uri, int $digest): string
-    {
-        [$endpoint, $query] = split_url($unsigned);
-        $octets = $query . '&SigAlg=' . rawurlencode($uri);
-        if (! openssl_sign($octets, $signature, $this->pem('sp-signing-key.pem'), $digest)) {
-            throw new RuntimeException('OpenSSL did not sign');
-        }
-
-        return $endpoint . '?' . $octets . '&Signature=' . rawurlencode(base64_encode($signature));
-    }
-
-    /**
-     * The RelayState a field holds, against the one this package sent.
-     */
-    private function relayStateOf(?string $field, ?string $sent): string
-    {
-        if ($field === null) {
-            return $sent === null ? 'absent, none sent' : 'ABSENT, one sent';
-        }
-
-        return sprintf('%s, %d bytes%s', var_export($field, true), strlen($field), $field === $sent ? ', as sent' : ', NOT as sent');
     }
 
     /**
@@ -973,7 +859,7 @@ final class Exchange
     }
 }
 
-$run = new Run(in_array('--keep', $argv, true) ? __DIR__ . '/../../Fixture/real' : __DIR__ . '/received');
+$run = simplesamlphp_run($argv);
 if (! is_dir(__DIR__ . '/written')) {
     mkdir(__DIR__ . '/written');
 }
