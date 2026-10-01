@@ -221,9 +221,10 @@ final readonly class RedirectSender
      * and Signature when $signing is given, in that order (B-2). The model's writer is called without signing (B-6).
      *
      * @throws \InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                   that holds a fragment, or a query the receiver would refuse (6.3 step 6),
-     *                                   what the writer refuses so
-     * @throws Exception\LimitExceeded   a query string longer than maxQueryStringBytes, which the receiver would refuse
+     *                                   missing, or holding a fragment or a query the receiver would refuse (6.3
+     *                                   step 1), what the writer refuses so
+     * @throws Exception\LimitExceeded   a serialized message longer than maxInflatedBytes, or a query string longer
+     *                                   than maxQueryStringBytes, which the receiver would refuse
      * @throws \Beffroi\Xml\Core\Exception\RefusedXml what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
     public function authnRequest(AuthnRequest $request, ?Signing $signing, ?string $relayState = null): string;
@@ -318,12 +319,14 @@ Steps 1 to 6 refuse before the message is decoded: the bounds, the parameters an
 
 `RedirectSender::authnRequest()`, `logoutRequest()` and `logoutResponse()`:
 
-1. **The arguments.** A `RelayState` empty or longer than 80 bytes is `\InvalidArgumentException` (B-9).
-2. **The document.** The model's writer, `AuthnRequestWriter`, `LogoutRequestWriter` or `LogoutResponseWriter`, `write($message, null)`: unsigned in XML (B-6). The writer refuses a message without `Destination` and what its reader would refuse (M-15).
-3. **The bytes.** `Serializer::serialize()` once (B-10); raw DEFLATE; base64 without line breaks; percent-encoding of every byte outside the unreserved characters of RFC 3986 §2.3, `ALPHA`, `DIGIT`, `-`, `.`, `_` and `~`, as `%` and two uppercase hexadecimal digits (RFC 3986 §2.1), which is how SimpleSAMLphp 2.5.3.1 writes its query strings (section 13).
+1. **The arguments.** Every check that needs nothing but the arguments, before anything is written or signed, so that a key management service is never called for a URL the sender then refuses; the `Destination` is the message's, known before the writer runs. A `RelayState` empty or longer than 80 bytes (B-9); an `AuthnRequest` without `Destination`, the URL the message goes to, which its writer refuses too (M-15); a `Destination` holding a fragment, or a query whose names, read as 6.1 step 2 reads them, hold one of the six parameters of B-1, under its literal name or a percent-encoded spelling of it, or a malformed percent-escape, each of which the package's receiver would refuse (B-1, B-8): `\InvalidArgumentException`.
+2. **The document.** The model's writer, `AuthnRequestWriter`, `LogoutRequestWriter` or `LogoutResponseWriter`, `write($message, null)`: unsigned in XML (B-6). The writer refuses what its reader would refuse (M-15), before anything is signed.
+3. **The bytes.** `Serializer::serialize()` once (B-10); longer than `maxInflatedBytes`, which the package's receiver would refuse while inflating them, the serialized bytes are `LimitExceeded` (B-7), before they are deflated; raw DEFLATE; base64 without line breaks; percent-encoding of every byte outside the unreserved characters of RFC 3986 §2.3, `ALPHA`, `DIGIT`, `-`, `.`, `_` and `~`, as `%` and two uppercase hexadecimal digits (RFC 3986 §2.1), which is how SimpleSAMLphp 2.5.3.1 writes its query strings (section 13).
 4. **The octets.** `SAMLRequest=`, or `SAMLResponse=` for a logout response, and the encoded message; then `&RelayState=` and the encoded `RelayState` when one is given; then, when `$signing` is given, `&SigAlg=` and the encoded URI of its algorithm (B-2).
 5. **The signature.** `$signing->key->sign($octets, $signing->algorithm)` (dsig.md §5.2), base64-encoded without line breaks, percent-encoded as in step 3, appended as `&Signature=`.
-6. **The URL.** The message's `Destination`, then `?`, or `&` when the `Destination` already holds a query, then the query of steps 4 and 5. A `Destination` holding a fragment, or a query whose names, read as 6.1 step 2 reads them, hold one of the six parameters of B-1, under its literal name or a percent-encoded spelling of it, or a malformed percent-escape, each of which the package's receiver would refuse (B-1, B-8), is `\InvalidArgumentException`; a query, the `Destination`'s own included, longer than `maxQueryStringBytes`, which the package's receiver would refuse, is `LimitExceeded` (B-7).
+6. **The URL.** The message's `Destination`, then `?`, or `&` when the `Destination` already holds a query (step 1), then the query of steps 4 and 5. A query, the `Destination`'s own included, longer than `maxQueryStringBytes`, which the package's receiver would refuse, is `LimitExceeded` (B-7).
+
+What the sender writes is what the package's own receiver reads under the same `BindingLimits`: the two bounds of the receiver are checked on emission, each where its length is first known, and neither can move earlier. The serialized message exists once the writer wrote it and `Core` serialized it (step 3). The query holds the deflated message and, when signed, the `Signature`, whose length is the key's and is known only once the key signed (step 5): a query over `maxQueryStringBytes` is the one refusal that comes after the key was called.
 
 ### 6.4 HTTP-POST sent, in order
 
@@ -441,8 +444,8 @@ One case per row, a query string, a form or a call, each a variant of a valid ca
 | A deflated message posted in a form | `Core`'s refusal of what is not XML, never inflated (B-8) |
 | A `samlp:Response` over HTTP-Redirect given to `logoutMessage()`; an `AuthnRequest` in a `SAMLResponse`; a `LogoutResponse` in a `SAMLRequest` | the model's `MalformedMessage` |
 | A message `Core` refuses, a `DOCTYPE` among the inflated bytes | `Core`'s `DoctypeRefused`, as it is |
-| A sender given a `RelayState` of 81 bytes or an empty one; a `Destination` holding a fragment, or a `SAMLRequest` in its query | `\InvalidArgumentException` |
-| A sender whose query string would exceed `maxQueryStringBytes` | `LimitExceeded` (B-7) |
+| A sender given a `RelayState` of 81 bytes or an empty one; an `AuthnRequest` without `Destination`; a `Destination` holding a fragment, or a `SAMLRequest` in its query; the key never called | `\InvalidArgumentException` |
+| A sender whose query string would exceed `maxQueryStringBytes`; whose serialized message is longer than `maxInflatedBytes`, the key never called | `LimitExceeded` (B-7) |
 
 ### 9.3 Behaviour corpus
 
