@@ -221,7 +221,8 @@ final readonly class RedirectSender
      * and Signature when $signing is given, in that order (B-2). The model's writer is called without signing (B-6).
      *
      * @throws \InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                   that holds a fragment or a parameter of B-1, what the writer refuses so
+     *                                   that holds a fragment, or a query the receiver would refuse (6.3 step 6),
+     *                                   what the writer refuses so
      * @throws Exception\LimitExceeded   a query string longer than maxQueryStringBytes, which the receiver would refuse
      * @throws \Beffroi\Xml\Core\Exception\RefusedXml what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
@@ -322,7 +323,7 @@ Steps 1 to 6 refuse before the message is decoded: the bounds, the parameters an
 3. **The bytes.** `Serializer::serialize()` once (B-10); raw DEFLATE; base64 without line breaks; percent-encoding of every byte outside the unreserved characters of RFC 3986 §2.3, `ALPHA`, `DIGIT`, `-`, `.`, `_` and `~`, as `%` and two uppercase hexadecimal digits (RFC 3986 §2.1), which is how SimpleSAMLphp 2.5.3.1 writes its query strings (section 13).
 4. **The octets.** `SAMLRequest=`, or `SAMLResponse=` for a logout response, and the encoded message; then `&RelayState=` and the encoded `RelayState` when one is given; then, when `$signing` is given, `&SigAlg=` and the encoded URI of its algorithm (B-2).
 5. **The signature.** `$signing->key->sign($octets, $signing->algorithm)` (dsig.md §5.2), base64-encoded without line breaks, percent-encoded as in step 3, appended as `&Signature=`.
-6. **The URL.** The message's `Destination`, then `?`, or `&` when the `Destination` already holds a query, then the query of steps 4 and 5. A `Destination` holding a fragment, or a query holding one of the six parameters of B-1, is `\InvalidArgumentException`; a query, the `Destination`'s own included, longer than `maxQueryStringBytes`, which the package's receiver would refuse, is `LimitExceeded` (B-7).
+6. **The URL.** The message's `Destination`, then `?`, or `&` when the `Destination` already holds a query, then the query of steps 4 and 5. A `Destination` holding a fragment, or a query whose names, read as 6.1 step 2 reads them, hold one of the six parameters of B-1, under its literal name or a percent-encoded spelling of it, or a malformed percent-escape, each of which the package's receiver would refuse (B-1, B-8), is `\InvalidArgumentException`; a query, the `Destination`'s own included, longer than `maxQueryStringBytes`, which the package's receiver would refuse, is `LimitExceeded` (B-7).
 
 ### 6.4 HTTP-POST sent, in order
 
@@ -516,8 +517,9 @@ tests/                 Unit/ (one class per public class of src/ and per class o
                        real query strings and forms of 9.4 in RealDocumentsTest), Support/ (FrozenClock,
                        InMemoryReplayGuard, the builders of hostile and adversarial query strings), Fixture/ (keys,
                        copied from saml2-model, with their README; hostile, behaviour, real, each capture recorded in
-                       the README of its harness), Interop/simplesamlphp/ and Interop/keycloak/ (9.5, the timing of
-                       9.6), PhpStan/ (the rules of model.md §8, copied, extended with section 8)
+                       the README of its harness; oracle, the scripts of the OpenSSL oracle of 9.1, its commands in
+                       its README), Interop/simplesamlphp/ and Interop/keycloak/ (9.5, the timing of 9.6), PhpStan/
+                       (the rules of model.md §8, copied, extended with section 8)
 castor.php, .castor/   qa.php: install (Composer in the phpqa image, the two private dependencies read with the GitHub
                        CLI's token passed by name, never written), phpunit, phpstan, deptrac, mago-format, mago-lint,
                        rector, lint, composer-validate, infect, prepare-pr, phpqa-update, redirect-oracle (9.1);
