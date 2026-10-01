@@ -47,18 +47,24 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/DetachedSignature.php',
     // B-1, B-3, B-9, section 6.1 steps 2 to 7: the reading of a query string's parameters.
     'src/Internal/QueryParameters.php',
+    // B-1, B-7, B-9, section 6.2 steps 1 to 3: the reading of a form's fields.
+    'src/Internal/FormFields.php',
     // B-5, section 5.2: one input read whole, the message and the detached signature of that very input.
     'src/Internal/Reception.php',
-    // Section 6.1 steps 3 and 11: the message each service of ours expects.
+    // Sections 6.1 steps 3 and 11, 6.2 steps 2 and 6: the message each service of ours expects.
     'src/Internal/Service.php',
     // Section 6.1: HTTP-Redirect received, in order (B-6, B-7).
     'src/RedirectReceiver.php',
+    // Section 6.2: HTTP-POST received, in order (B-7, B-8, B-10).
+    'src/PostReceiver.php',
     // Section 6.3: HTTP-Redirect sent, in order (B-2, B-6, B-9, B-10, B-12).
     'src/RedirectSender.php',
     // Section 6.1 step 12: authenticated as the binding says, then validated (B-5).
     'src/ReceivedAuthnRequest.php',
     'src/ReceivedLogoutRequest.php',
     'src/ReceivedLogoutResponse.php',
+    // Section 6.2 step 7: a response, over HTTP-POST only, validated by the model (B-5, B-12).
+    'src/ReceivedResponse.php',
 ];
 
 /**

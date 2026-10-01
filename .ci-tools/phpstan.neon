@@ -159,8 +159,8 @@ parameters:
 		# a boolean is never cast (M-6)
 		- boolval
 		- settype
-		# section 8, B-1, B-13: a second parser of the request, and HTTP itself, are the consumer's
-		- parse_str
+		# section 8, B-1, B-13: a second parser of the request, and HTTP itself, are the consumer's; parse_str() is
+		# confined below, the tests playing the consumer's parser of a form
 		- http_build_query
 		- parse_url
 		- filter_input
@@ -230,6 +230,11 @@ parameters:
 		-
 			function: deflate_add
 			allowedIn: [src/Internal/Deflater.php, tests/]
+		# section 8, B-1: the parser of a form is the consumer's; the tests play it, PHP's own, the one behind the
+		# fields a consumer gives PostReceiver (sections 6.7, 6.8, 9.1)
+		-
+			function: parse_str
+			allowedIn: [tests/]
 		# section 8: the environment is the consumer's; the oracle of section 9.1 reads its directory from it, as the
 		# model's does
 		-
