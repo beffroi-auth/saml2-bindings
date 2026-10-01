@@ -45,6 +45,8 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/SignedOctets.php',
     // B-4: the detached signature, verified under the keys of the peer's metadata.
     'src/Internal/DetachedSignature.php',
+    // B-1, B-3, B-9, section 6.1 steps 2 to 7: the reading of a query string's parameters.
+    'src/Internal/QueryParameters.php',
 ];
 
 /**
