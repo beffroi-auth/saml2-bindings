@@ -33,6 +33,8 @@ const INFECTION_STRICT_FILES = [
     'src/Exception/NoVerificationKey.php',
     'src/Exception/Unsupported.php',
     'src/Exception/LimitExceeded.php',
+    // B-8: the percent codec, the one place a percent-escape is read or written.
+    'src/Internal/Percent.php',
 ];
 
 /**
