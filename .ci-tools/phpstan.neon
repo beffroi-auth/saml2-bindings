@@ -243,7 +243,8 @@ parameters:
 				- src/ReceivedLogoutRequest.php
 				- src/ReceivedLogoutResponse.php
 				- src/ReceivedResponse.php
-	# Section 8, B-13: the superglobals, for BannedConstructsRule. The package takes strings and arrays.
+	# Section 8, B-13: the superglobals, for BannedConstructsRule. The package takes strings and arrays. $GLOBALS holds
+	# every other one under another name ($GLOBALS['_GET']), and is banned with them.
 	bannedVariables:
 		- _GET
 		- _POST
@@ -252,6 +253,7 @@ parameters:
 		- _COOKIE
 		- _FILES
 		- _ENV
+		- GLOBALS
 
 parametersSchema:
 	bannedNames: listOf(string())
