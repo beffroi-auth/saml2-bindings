@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Beffroi\Saml2\Bindings\Tests\Support;
 
 use function array_map;
+use Beffroi\Saml2\Bindings\PostForm;
 use function implode;
 use function parse_str;
 use function urlencode;
@@ -53,5 +54,21 @@ final readonly class BrowserForm
     public static function posted(array $fields): array
     {
         return self::parsed(self::body($fields));
+    }
+
+    /**
+     * The fields of $form, in its order, posted by a browser to its action and parsed by PHP: what the consumer of the
+     * peer gives its PostReceiver (section 6.7).
+     *
+     * @return array<array-key, mixed>
+     */
+    public static function submitted(PostForm $form): array
+    {
+        $fields = [];
+        foreach ($form->fields as $name => $value) {
+            $fields[] = [$name, $value];
+        }
+
+        return self::posted($fields);
     }
 }

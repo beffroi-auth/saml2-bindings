@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Beffroi\Saml2\Bindings\Tests\Unit\Support;
 
+use Beffroi\Saml2\Bindings\PostForm;
 use Beffroi\Saml2\Bindings\Tests\Support\BrowserForm;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -23,7 +24,11 @@ final class BrowserFormTest extends TestCase
     public function itEncodesTheBodyAsABrowserDoes(): void
     {
         // When
-        $body = BrowserForm::body([['SAMLResponse', 'ab+/=='], ['RelayState', 'a b&c'], ['SAMLResponse[]', 'x']]);
+        $body = BrowserForm::body([
+            ['SAMLResponse',   'ab+/=='],
+            ['RelayState',     'a b&c'],
+            ['SAMLResponse[]', 'x'],
+        ]);
 
         // Then
         static::assertSame('SAMLResponse=ab%2B%2F%3D%3D&RelayState=a+b%26c&SAMLResponse%5B%5D=x', $body);
@@ -39,11 +44,31 @@ final class BrowserFormTest extends TestCase
         // When
         $fields = BrowserForm::posted([
             ['SAMLResponse', "ab+/\r\n=="],
-            ['RelayState', 'a b&c'],
+            ['RelayState',   'a b&c'],
             ['RelayState[]', 'x'],
         ]);
 
         // Then
         static::assertSame(['SAMLResponse' => "ab+/\r\n==", 'RelayState' => ['x']], $fields);
+    }
+
+    /**
+     * Section 6.7: the fields of a PostForm, posted by a browser and parsed by PHP, are the fields of the form, the
+     * action aside.
+     */
+    #[Test]
+    public function itSubmitsTheFieldsOfAPostForm(): void
+    {
+        // Given
+        $form = new PostForm('https://sp.example.com/saml/acs?a=b', [
+            'SAMLResponse' => 'ab+/==',
+            'RelayState' => '<a b>',
+        ]);
+
+        // When
+        $fields = BrowserForm::submitted($form);
+
+        // Then
+        static::assertSame(['SAMLResponse' => 'ab+/==', 'RelayState' => '<a b>'], $fields);
     }
 }
