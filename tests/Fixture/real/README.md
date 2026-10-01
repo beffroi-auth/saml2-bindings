@@ -21,3 +21,39 @@ commit 9c833c5 of its `main` (1 October 2026), the merge of its stack.
 The XML each query string carries is the model's evidence, kept under its own `tests/Fixture/real/`
 (`simplesamlphp-2.5.3.1-sp-authnrequest-to-model-2026-09-30.xml`, `...-sp-logoutrequest-to-model-2026-09-30.xml`); the
 query string as it arrived is this package's.
+
+## SimpleSAMLphp 2.5.3.1, 1 October 2026
+
+Captured by this package's judge (`tests/Interop/simplesamlphp/`, section 9.5 of the specification), run with
+`castor simplesamlphp --keep` on PHP 8.5.10 between 11:03:28 and 11:03:40 UTC, the messages issued between 11:03:33 and
+11:03:37 UTC. Each was kept once this package had read it and the model had validated it, or refused it as the table
+says. A query string is the raw query of the URL SimpleSAMLphp redirected to, after its `?`, as the consumer reads it
+from `QUERY_STRING`; a form is the `application/x-www-form-urlencoded` body a browser posts from the form of the page,
+its fields read by the harness's reader of HTML (Dom\HTMLDocument) and encoded as a browser encodes them, what the
+consumer's parser then decodes (section 6.8). No final line feed in either.
+
+`capture.php`: SimpleSAMLphp's service provider `default-sp` and its identity provider, as the installation configures
+them.
+
+| File | What | Bytes |
+|---|---|---|
+| `simplesamlphp-2.5.3.1-idp-metadata-2026-10-01.xml` | the identity provider's metadata as served, HTTP-Redirect alone for its single sign-on and single logout services (its default publication) | 3 813 |
+| `simplesamlphp-2.5.3.1-sp-metadata-default-sp-2026-10-01.xml` | `default-sp`'s metadata as served, `AuthnRequestsSigned="true"` | 4 212 |
+| `simplesamlphp-2.5.3.1-sp-authnrequest-query-2026-10-01.txt` | `default-sp`'s `AuthnRequest`, signed under `sign.authnrequest`, its `RelayState` its `ReturnTo` of 56 bytes | 986 |
+| `simplesamlphp-2.5.3.1-idp-response-form-2026-10-01.txt` | the response to it, the response and its assertion signed (`saml20.sign.response`, its default), `RelayState` echoed | 9 781 |
+| `simplesamlphp-2.5.3.1-sp-logoutrequest-query-2026-10-01.txt` | `default-sp`'s `LogoutRequest`, signed under `sign.logout`, its `RelayState` an ID of its state, 43 bytes | 1 061 |
+| `simplesamlphp-2.5.3.1-idp-logoutresponse-unsigned-refused-query-2026-10-01.txt` | the identity provider's `LogoutResponse` under its defaults, unsigned: read, then refused by the model (`SignatureRequired`, M-2) | 522 |
+
+`exchange.php`: SimpleSAMLphp's two parties and this package's roles at `http://localhost:8093/bindings/`, whose
+metadata the exchange wrote with the test keys of `tests/Fixture/keys/` (`RealDocumentsTest` builds the same roles).
+
+| File | What | Bytes |
+|---|---|---|
+| `simplesamlphp-2.5.3.1-sp-metadata-for-bindings-2026-10-01.xml` | `for-bindings`'s metadata as served, `AuthnRequestsSigned="true"` | 4 222 |
+| `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-query-2026-10-01.txt` | `for-bindings`'s `AuthnRequest` to this package's identity provider, signed, its `ReturnTo` of 44 bytes as `RelayState` | 978 |
+| `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt` | the same for a `ReturnTo` of 105 bytes, sent as a `RelayState` of 105 bytes: refused by the receiver (`InvalidRelayState`, B-9, SAML Bindings §3.4.3) | 1 041 |
+| `simplesamlphp-2.5.3.1-sp-logoutrequest-to-bindings-query-2026-10-01.txt` | `for-bindings`'s `LogoutRequest` to this package's identity provider, signed | 1 053 |
+| `simplesamlphp-2.5.3.1-idp-response-to-bindings-form-2026-10-01.txt` | the identity provider's response to this package's service provider `sp`, both signed, its `RelayState` `bindings login ~` echoed | 9 519 |
+| `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-query-2026-10-01.txt` | its `LogoutResponse` to `sp`, signed under `sign.logout`, its `RelayState` `bindings logout ~` escaped `bindings+logout+%7E` by PHP's `urlencode()` | 944 |
+| `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-unsigned-refused-query-2026-10-01.txt` | its `LogoutResponse` to `sp-defaults`, under its defaults, unsigned, no `RelayState` since none was sent: refused by the model (`SignatureRequired`, M-2) | 467 |
+| `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-form-2026-10-01.txt` | its `LogoutResponse` to `sp-post`, whose single logout service is published for HTTP-POST alone, signed in its XML under `sign.logout`, its `RelayState` of 80 bytes echoed | 3 987 |
