@@ -47,6 +47,12 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/DetachedSignature.php',
     // B-1, B-3, B-9, section 6.1 steps 2 to 7: the reading of a query string's parameters.
     'src/Internal/QueryParameters.php',
+    // Section 6.1: HTTP-Redirect received, in order (B-6, B-7).
+    'src/RedirectReceiver.php',
+    // Section 6.1 step 12: authenticated as the binding says, then validated (B-5).
+    'src/ReceivedAuthnRequest.php',
+    'src/ReceivedLogoutRequest.php',
+    'src/ReceivedLogoutResponse.php',
 ];
 
 /**
