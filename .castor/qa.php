@@ -41,6 +41,8 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/Inflater.php',
     // B-8: the deflater, raw DEFLATE.
     'src/Internal/Deflater.php',
+    // B-2: the signed octets, the raw values in the binding's order.
+    'src/Internal/SignedOctets.php',
 ];
 
 /**
