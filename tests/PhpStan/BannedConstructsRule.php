@@ -33,8 +33,9 @@ use function strtolower;
  * (M-6). A \DateTime or a \DateTimeImmutable built without an explicit time, which reads the clock of the machine: the
  * package needs no time, and the tests read the frozen clock of tests/Support. A constant time string is explicit when
  * it names a date, a time and the UTC zone, and nothing relative ("now", "today", "+1 day"); a time string known only at
- * runtime passes. A superglobal, $_GET, $_POST and the others of the configuration: the package takes the raw query
- * string and the form's fields as the consumer received them, never the request itself (B-13, section 6.8).
+ * runtime passes. A superglobal, $_GET, $_POST and the others of the configuration, $GLOBALS among them, which reads
+ * every other one under another name ($GLOBALS['_GET']): the package takes the raw query string and the form's fields
+ * as the consumer received them, never the request itself (B-13, section 6.8).
  *
  * @implements Rule<Node>
  */
