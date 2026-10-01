@@ -129,20 +129,18 @@ trait SendingFixtures
     }
 
     /**
-     * The sender under the default bounds of section 7, or under $maxQueryStringBytes.
+     * The sender under the default bounds of section 7, or under $limits.
      */
-    private static function sender(?int $maxQueryStringBytes = null): RedirectSender
+    private static function sender(?BindingLimits $limits = null): RedirectSender
     {
-        return $maxQueryStringBytes === null
-            ? new RedirectSender()
-            : new RedirectSender(new BindingLimits(maxQueryStringBytes: $maxQueryStringBytes));
+        return new RedirectSender($limits ?? new BindingLimits());
     }
 
     /**
      * The URL the sender writes for $message: the AuthnRequest unsigned or signed by the service provider, the
-     * LogoutRequest signed by the identity provider, the LogoutResponse signed by the service provider, under
-     * $algorithm, with $relayState, to $destination or to the message's own, under $maxQueryStringBytes or the default
-     * bound.
+     * LogoutRequest signed by the identity provider, the LogoutResponse signed by the service provider, each under
+     * $algorithm, or by the key of $signing when one is given; with $relayState, to $destination or to the message's
+     * own, under $limits or the default bounds.
      *
      * @param Message $message
      */
@@ -151,9 +149,10 @@ trait SendingFixtures
         ?string $relayState = null,
         ?string $destination = null,
         SignatureAlgorithm $algorithm = SignatureAlgorithm::RsaSha256,
-        ?int $maxQueryStringBytes = null,
+        ?BindingLimits $limits = null,
+        ?Signing $signing = null,
     ): string {
-        $sender = self::sender($maxQueryStringBytes);
+        $sender = self::sender($limits);
 
         return match ($message) {
             'an unsigned AuthnRequest' => $sender->authnRequest(
@@ -163,17 +162,17 @@ trait SendingFixtures
             ),
             'an AuthnRequest' => $sender->authnRequest(
                 self::authnRequest($destination ?? self::SSO),
-                self::signing('sp', $algorithm),
+                $signing ?? self::signing('sp', $algorithm),
                 $relayState,
             ),
             'a LogoutRequest' => $sender->logoutRequest(
                 self::logoutRequest($destination ?? self::SP_SLO),
-                self::signing('idp', $algorithm),
+                $signing ?? self::signing('idp', $algorithm),
                 $relayState,
             ),
             'a LogoutResponse' => $sender->logoutResponse(
                 self::logoutResponse($destination ?? self::IDP_SLO),
-                self::signing('sp', $algorithm),
+                $signing ?? self::signing('sp', $algorithm),
                 $relayState,
             ),
         };

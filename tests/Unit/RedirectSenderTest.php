@@ -5,16 +5,24 @@ declare(strict_types=1);
 namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
 use function base64_decode;
+use Beffroi\Saml2\Bindings\BindingLimits;
 use Beffroi\Saml2\Bindings\Exception\LimitExceeded;
+use Beffroi\Saml2\Bindings\RedirectReceiver;
 use Beffroi\Saml2\Bindings\RedirectSender;
 use Beffroi\Saml2\Bindings\Tests\Support\RedirectQuery;
 use Beffroi\Saml2\Bindings\Tests\Support\TestKeys;
+use Beffroi\Saml2\Model\Assertion\Issuer;
+use Beffroi\Saml2\Model\Assertion\NameId;
+use Beffroi\Saml2\Model\Protocol\LogoutRequest;
 use Beffroi\Saml2\Model\SamlLoader;
+use Beffroi\Saml2\Model\Writing\Signing;
 use Beffroi\Xml\Dsig\Exception\AlgorithmUnavailable;
 use Beffroi\Xml\Dsig\SignatureAlgorithm;
+use Beffroi\Xml\Dsig\SigningKeyInterface;
 use Beffroi\Xml\Dsig\VerificationKey;
 use Beffroi\Xml\Dsig\VerificationKeys;
 use Beffroi\Xml\Dsig\Verifier;
+use DateTimeImmutable;
 use function explode;
 use function get_class_methods;
 use function gzinflate;
@@ -24,6 +32,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function rawurldecode;
 use function strlen;
+use Throwable;
 
 /**
  * Section 6.3, B-2, B-6, B-8, B-9, B-10, B-12: what RedirectSender writes, read back from the URL it returns with PHP's
@@ -276,7 +285,7 @@ final class RedirectSenderTest extends TestCase
     }
 
     /**
-     * §9.2 row 33, section 6.3 step 6, RFC 3986 §3.5: a Destination holding a fragment, which a URL of HTTP-Redirect
+     * §9.2 row 33, section 6.3 step 1, RFC 3986 §3.5: a Destination holding a fragment, which a URL of HTTP-Redirect
      * does not carry, is a programming error of the caller, whatever the method.
      *
      * @param Message $message
@@ -304,7 +313,7 @@ final class RedirectSenderTest extends TestCase
     }
 
     /**
-     * §9.2 row 33, B-1, section 6.3 step 6: a Destination whose own query holds one of the six parameters of the
+     * §9.2 row 33, B-1, section 6.3 step 1: a Destination whose own query holds one of the six parameters of the
      * binding, under its name or a percent-encoded spelling of it, first or not, with or without "=", which the
      * receiver would refuse, is a programming error of the caller.
      */
@@ -336,7 +345,7 @@ final class RedirectSenderTest extends TestCase
     }
 
     /**
-     * B-8, section 6.3 step 6: a Destination whose own query holds a malformed percent-escape in a name, which the
+     * B-8, section 6.3 step 1: a Destination whose own query holds a malformed percent-escape in a name, which the
      * receiver would refuse, is a programming error of the caller.
      */
     #[Test]
@@ -362,7 +371,7 @@ final class RedirectSenderTest extends TestCase
     }
 
     /**
-     * Section 6.1 step 2, section 6.3 step 6: a value of the Destination's own query is not decoded, as the receiver
+     * Section 6.1 step 2, section 6.3 step 1: a value of the Destination's own query is not decoded, as the receiver
      * decodes no value of a parameter that is not the binding's, and a malformed escape in it is sent as it is.
      */
     #[Test]
@@ -387,7 +396,11 @@ final class RedirectSenderTest extends TestCase
         $bytes = strlen(self::queryString(self::send('an unsigned AuthnRequest', destination: $destination)));
 
         // When
-        $url = self::send('an unsigned AuthnRequest', destination: $destination, maxQueryStringBytes: $bytes);
+        $url = self::send(
+            'an unsigned AuthnRequest',
+            destination: $destination,
+            limits: new BindingLimits(maxQueryStringBytes: $bytes),
+        );
 
         // Then
         static::assertSame($bytes, strlen(self::queryString($url)));
@@ -411,7 +424,11 @@ final class RedirectSenderTest extends TestCase
         . ' bytes, which the receiver refuses (B-7).');
 
         // When
-        self::send('an unsigned AuthnRequest', destination: $destination, maxQueryStringBytes: $bound);
+        self::send(
+            'an unsigned AuthnRequest',
+            destination: $destination,
+            limits: new BindingLimits(maxQueryStringBytes: $bound),
+        );
     }
 
     /**
@@ -424,18 +441,187 @@ final class RedirectSenderTest extends TestCase
     }
 
     /**
-     * Section 6.3 step 2, M-15: what the model's writer refuses, an AuthnRequest without Destination, is refused as the
-     * writer refuses it, a programming error of the caller.
+     * Section 6.3 step 3, B-7: a message whose serialized bytes are exactly maxInflatedBytes long is sent, and the
+     * package's receiver, under the same bounds, inflates and reads it.
+     */
+    #[Test]
+    public function itSendsAMessageOfExactlyMaxInflatedBytesWhichTheReceiverReads(): void
+    {
+        // Given
+        $limits = new BindingLimits(maxInflatedBytes: strlen(self::fixture(self::AUTHN_REQUEST_WRITTEN)));
+        $url = self::send('an AuthnRequest', limits: $limits);
+
+        // When
+        $received = new RedirectReceiver(SamlLoader::create(), $limits)->authnRequest(self::queryString($url));
+
+        // Then
+        static::assertSame('https://sp.example.com/saml', $received->request->issuer);
+    }
+
+    /**
+     * §9.2 row 34, B-7, section 6.3 step 3: a message whose serialized bytes are one byte longer than maxInflatedBytes,
+     * which the package's receiver would refuse while inflating it, is refused before it is deflated, whatever the
+     * method.
+     *
+     * @param Message $message
+     */
+    #[Test]
+    #[DataProvider('provideMessagesOneByteOverTheInflatedBound')]
+    public function itRefusesAMessageOverMaxInflatedBytes(string $message, string $written): void
+    {
+        // Given
+        $bound = strlen(self::fixture($written)) - 1;
+
+        // Then
+        $this->expectException(LimitExceeded::class);
+        $this->expectExceptionMessageIs('The message is longer than maxInflatedBytes, '
+        . $bound
+        . ' bytes, which the receiver refuses once inflated (B-7).');
+
+        // When
+        self::send($message, limits: new BindingLimits(maxInflatedBytes: $bound));
+    }
+
+    /**
+     * @return iterable<string, array{Message, string}>
+     */
+    public static function provideMessagesOneByteOverTheInflatedBound(): iterable
+    {
+        yield 'an unsigned AuthnRequest' => ['an unsigned AuthnRequest', self::AUTHN_REQUEST_WRITTEN];
+        yield 'a LogoutRequest' => ['a LogoutRequest', self::LOGOUT_REQUEST];
+        yield 'a LogoutResponse' => ['a LogoutResponse', self::LOGOUT_RESPONSE];
+    }
+
+    /**
+     * §9.2 rows 33 and 34, section 6.3 steps 1 and 3: every refusal that needs nothing but the arguments, and the bound
+     * of the serialized message, come before the signature: a key management service is never called for a URL the
+     * sender refuses.
+     *
+     * @param Message                 $message
+     * @param class-string<Throwable> $exception
+     */
+    #[Test]
+    #[DataProvider('provideRefusalsBeforeTheKey')]
+    public function itNeverCallsTheKeyForAUrlItRefuses(
+        string $message,
+        ?string $relayState,
+        ?string $destination,
+        BindingLimits $limits,
+        string $exception,
+        string $refusal,
+    ): void {
+        // Given
+        $signing = $this->uncalledSigning();
+
+        // Then
+        $this->expectException($exception);
+        $this->expectExceptionMessageIs($refusal);
+
+        // When
+        self::send($message, $relayState, $destination, limits: $limits, signing: $signing);
+    }
+
+    /**
+     * @return iterable<string, array{Message, ?string, ?string, BindingLimits, class-string<Throwable>, string}>
+     */
+    public static function provideRefusalsBeforeTheKey(): iterable
+    {
+        $limits = new BindingLimits();
+
+        yield 'a RelayState of 81 bytes, an AuthnRequest' => [
+            'an AuthnRequest',
+            self::RELAY_STATE . 'x',
+            null,
+            $limits,
+            InvalidArgumentException::class,
+            'The RelayState is longer than 80 bytes (B-9).',
+        ];
+        yield 'an empty RelayState, a LogoutRequest' => [
+            'a LogoutRequest',
+            '',
+            null,
+            $limits,
+            InvalidArgumentException::class,
+            'The RelayState is empty (B-9).',
+        ];
+        yield 'a Destination holding a fragment, a LogoutResponse' => [
+            'a LogoutResponse',
+            null,
+            self::IDP_SLO . '#fragment',
+            $limits,
+            InvalidArgumentException::class,
+            'The Destination holds a fragment, which a URL of HTTP-Redirect does not carry (section 6.3).',
+        ];
+        yield 'a parameter of the binding in the query of the Destination, a LogoutRequest' => [
+            'a LogoutRequest',
+            null,
+            self::SP_SLO . '?Signature=x',
+            $limits,
+            InvalidArgumentException::class,
+            'The query of the Destination holds a parameter of the binding (B-1).',
+        ];
+        yield 'a malformed escape in a name of the query of the Destination, an AuthnRequest' => [
+            'an AuthnRequest',
+            null,
+            self::SSO . '?a%G1=1',
+            $limits,
+            InvalidArgumentException::class,
+            'The query of the Destination holds a malformed percent-escape in a name, which the receiver refuses (B-8).',
+        ];
+        yield 'a message over maxInflatedBytes, a LogoutResponse' => [
+            'a LogoutResponse',
+            null,
+            null,
+            new BindingLimits(maxInflatedBytes: 100),
+            LimitExceeded::class,
+            'The message is longer than maxInflatedBytes, 100 bytes, which the receiver refuses once inflated (B-7).',
+        ];
+    }
+
+    /**
+     * §9.2 row 33, section 6.3 step 1, M-15: an AuthnRequest without Destination, the URL it is sent to, is a
+     * programming error of the caller, refused before its writer runs and before the key is called.
+     */
+    #[Test]
+    public function itRefusesAnAuthnRequestWithoutDestination(): void
+    {
+        // Given
+        $signing = $this->uncalledSigning();
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('The AuthnRequest holds no Destination, the URL it is sent to (section 6.3).');
+
+        // When
+        new RedirectSender()->authnRequest(self::authnRequest(null), $signing);
+    }
+
+    /**
+     * Section 6.3 step 2, M-15: what the model's writer refuses, a LogoutRequest whose NotOnOrAfter is not later than
+     * its IssueInstant, is refused as the writer refuses it, a programming error of the caller, before the key is
+     * called.
      */
     #[Test]
     public function itLetsTheRefusalOfTheWriterThrough(): void
     {
+        // Given
+        $instant = new DateTimeImmutable('2026-09-30T12:00:00Z');
+        $request = new LogoutRequest(
+            self::LOGOUT_REQUEST_ID,
+            $instant,
+            new Issuer('https://idp.example.com/saml'),
+            self::SP_SLO,
+            $instant,
+            new NameId('_7a2f4c1d9e'),
+        );
+        $signing = $this->uncalledSigning();
+
         // Then
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessageIs('The request holds no Destination, which the identity provider requires of a signed request, by XML or by the binding (section 6.6).');
+        $this->expectExceptionMessageIs('The NotOnOrAfter of the LogoutRequest is not later than its IssueInstant, to the second, which its reader refuses (section 6.6).');
 
         // When
-        new RedirectSender()->authnRequest(self::authnRequest(null), self::signing('sp'));
+        new RedirectSender()->logoutRequest($request, $signing);
     }
 
     /**
@@ -470,5 +656,16 @@ final class RedirectSenderTest extends TestCase
 
         // Then
         static::assertSame(['__construct', 'authnRequest', 'logoutRequest', 'logoutResponse'], $methods);
+    }
+
+    /**
+     * A Signing whose key fails the test if the sender calls it.
+     */
+    private function uncalledSigning(): Signing
+    {
+        $key = $this->createMock(SigningKeyInterface::class);
+        $key->expects($this->never())->method('sign');
+
+        return new Signing($key);
     }
 }

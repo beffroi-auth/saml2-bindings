@@ -23,7 +23,6 @@ use Beffroi\Xml\Core\Serializer;
 use function explode;
 use function in_array;
 use InvalidArgumentException;
-use LogicException;
 use SensitiveParameter;
 use function sprintf;
 use function str_contains;
@@ -32,12 +31,15 @@ use function strpos;
 use function substr;
 
 /**
- * HTTP-Redirect sent, in the order of section 6.3 (section 5.3): the RelayState checked (B-9), the message written by
- * the model's writer with no Signing, so that it carries no XML signature (B-6), serialized once by Core's Serializer
- * (B-10), raw-deflated, base64-encoded on one line and percent-encoded in uppercase hexadecimal (B-8), then, when a
+ * HTTP-Redirect sent, in the order of section 6.3 (section 5.3): first every check that needs nothing but the
+ * arguments, the RelayState (B-9) and the message's Destination, so that the signing key is never called for a URL the
+ * sender then refuses; then the message written by the model's writer with no Signing, so that it carries no XML
+ * signature (B-6), serialized once by Core's Serializer (B-10) and bounded as the receiver bounds it once inflated
+ * (B-7), raw-deflated, base64-encoded on one line and percent-encoded in uppercase hexadecimal (B-8); then, when a
  * Signing is given, the octets of B-2 signed through the Dsig signing port of the Signing, and the URL built on the
- * message's Destination. Only what the profiles let travel: an AuthnRequest, signed or not, and the two logout messages,
- * always signed; no method sends a Response (B-12).
+ * Destination, its query bounded as the receiver bounds it. What it writes, the package's receiver reads under the same
+ * BindingLimits. Only what the profiles let travel: an AuthnRequest, signed or not, and the two logout messages, always
+ * signed; no method sends a Response (B-12).
  */
 final readonly class RedirectSender
 {
@@ -47,7 +49,7 @@ final readonly class RedirectSender
     private const int MAX_RELAY_STATE_BYTES = 80;
 
     /**
-     * The six parameters of B-1, which a Destination's own query never holds (section 6.3 step 6).
+     * The six parameters of B-1, which a Destination's own query never holds (section 6.3 step 1).
      */
     private const array PARAMETERS = [
         'SAMLRequest',
@@ -59,8 +61,8 @@ final readonly class RedirectSender
     ];
 
     /**
-     * @param BindingLimits $limits maxQueryStringBytes, the bound of the receiver the query string is written for
-     *                              (section 7)
+     * @param BindingLimits $limits maxInflatedBytes and maxQueryStringBytes, the bounds of the receiver the URL is
+     *                              written for (section 7)
      */
     public function __construct(
         private BindingLimits $limits = new BindingLimits(),
@@ -75,10 +77,11 @@ final readonly class RedirectSender
      *                             (section 5.3)
      * @param ?string  $relayState opaque, at most 80 bytes, never empty (B-9)
      *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
-     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 6),
-     *                                  what the writer refuses so, a request without Destination among it
-     * @throws LimitExceeded            a query string longer than maxQueryStringBytes, which the receiver would refuse
+     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
+     *                                  missing, or holding a fragment or a query the receiver would refuse (section
+     *                                  6.3 step 1), what the writer refuses so
+     * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
+     *                                  than maxQueryStringBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
     public function authnRequest(
@@ -87,12 +90,15 @@ final readonly class RedirectSender
         ?Signing $signing,
         ?string $relayState = null,
     ): string {
-        $this->checkRelayState($relayState);
+        $destination =
+            $request->destination ?? throw new InvalidArgumentException('The AuthnRequest holds no Destination, the URL it is sent to (section 6.3).');
+        $ownQuery = $this->arguments($relayState, $destination);
 
         return $this->url(
             new AuthnRequestWriter()->write($request, null),
             'SAMLRequest',
-            $request->destination ?? throw new LogicException('The writer wrote an AuthnRequest without Destination (section 6.3).'),
+            $destination,
+            $ownQuery,
             $relayState,
             $signing,
         );
@@ -104,9 +110,10 @@ final readonly class RedirectSender
      * @param ?string $relayState opaque, at most 80 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
-     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 6),
+     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 1),
      *                                  what the writer refuses so
-     * @throws LimitExceeded            a query string longer than maxQueryStringBytes, which the receiver would refuse
+     * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
+     *                                  than maxQueryStringBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
     public function logoutRequest(
@@ -115,12 +122,13 @@ final readonly class RedirectSender
         Signing $signing,
         ?string $relayState = null,
     ): string {
-        $this->checkRelayState($relayState);
+        $ownQuery = $this->arguments($relayState, $request->destination);
 
         return $this->url(
             new LogoutRequestWriter()->write($request, null),
             'SAMLRequest',
             $request->destination,
+            $ownQuery,
             $relayState,
             $signing,
         );
@@ -132,8 +140,9 @@ final readonly class RedirectSender
      * @param ?string $relayState opaque, at most 80 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
-     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 6)
-     * @throws LimitExceeded            a query string longer than maxQueryStringBytes, which the receiver would refuse
+     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 1)
+     * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
+     *                                  than maxQueryStringBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
     public function logoutResponse(
@@ -142,15 +151,31 @@ final readonly class RedirectSender
         Signing $signing,
         ?string $relayState = null,
     ): string {
-        $this->checkRelayState($relayState);
+        $ownQuery = $this->arguments($relayState, $response->destination);
 
         return $this->url(
             new LogoutResponseWriter()->write($response, null),
             'SAMLResponse',
             $response->destination,
+            $ownQuery,
             $relayState,
             $signing,
         );
+    }
+
+    /**
+     * Step 1, what needs nothing but the arguments, before anything is written or signed: the RelayState, then the
+     * Destination.
+     *
+     * @return ?string the query the Destination already holds, without its "?", or null when it holds none
+     *
+     * @throws InvalidArgumentException a programming error of the caller
+     */
+    private function arguments(?string $relayState, string $destination): ?string
+    {
+        $this->checkRelayState($relayState);
+
+        return $this->ownQuery($destination);
     }
 
     /**
@@ -172,14 +197,15 @@ final readonly class RedirectSender
     }
 
     /**
-     * Steps 3 to 6: the document the writer returned, serialized once, deflated, encoded; the query of the binding,
-     * signed when a Signing is given; the URL on the Destination, bounded as the receiver bounds it.
+     * Steps 3 to 6: the document the writer returned, serialized once and bounded as the receiver bounds it once
+     * inflated, then deflated and encoded; the query of the binding, signed when a Signing is given; the URL on the
+     * Destination, its query bounded as the receiver bounds it.
      *
      * @param Document                     $document         the message, unsigned in XML (B-6)
      * @param 'SAMLRequest'|'SAMLResponse' $messageParameter the message parameter, as the binding names it
      * @param string                       $destination      the message's Destination
+     * @param ?string                      $ownQuery         the query the Destination holds, or null (step 1)
      *
-     * @throws InvalidArgumentException
      * @throws LimitExceeded
      * @throws RefusedXml
      */
@@ -187,17 +213,24 @@ final readonly class RedirectSender
         Document $document,
         string $messageParameter,
         string $destination,
+        ?string $ownQuery,
         ?string $relayState,
         #[SensitiveParameter]
         ?Signing $signing,
     ): string {
+        $serialized = new Serializer()->serialize($document);
+        if (strlen($serialized) > $this->limits->maxInflatedBytes) {
+            throw new LimitExceeded(sprintf(
+                'The message is longer than maxInflatedBytes, %d bytes, which the receiver refuses once inflated (B-7).',
+                $this->limits->maxInflatedBytes,
+            ));
+        }
         $query = $this->query(
             $messageParameter,
-            Percent::encode(Base64::encode(Deflater::deflate(new Serializer()->serialize($document)))),
+            Percent::encode(Base64::encode(Deflater::deflate($serialized))),
             $relayState === null ? null : Percent::encode($relayState),
             $signing,
         );
-        $ownQuery = $this->ownQuery($destination);
         $queryString = $ownQuery === null ? $query : $ownQuery . '&' . $query;
         if (strlen($queryString) > $this->limits->maxQueryStringBytes) {
             throw new LimitExceeded(sprintf(
@@ -242,7 +275,7 @@ final readonly class RedirectSender
     }
 
     /**
-     * Step 6: the query the Destination already holds, without its "?", or null when it holds none. Its names are read
+     * Step 1: the query the Destination already holds, without its "?", or null when it holds none. Its names are read
      * as the receiver reads them (section 6.1 step 2): one of the six parameters of B-1, under its name or a
      * percent-encoded spelling of it, or a malformed percent-escape, would be refused there, and is refused here.
      *
