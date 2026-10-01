@@ -6,6 +6,7 @@ namespace Beffroi\Saml2\Bindings;
 
 use Beffroi\Saml2\Bindings\Exception\NoVerificationKey;
 use Beffroi\Saml2\Bindings\Internal\DetachedSignature;
+use Beffroi\Saml2\Bindings\Internal\Reception;
 use Beffroi\Saml2\Model\Exception\MessageRefused;
 use Beffroi\Saml2\Model\Metadata\Binding;
 use Beffroi\Saml2\Model\Metadata\IdentityProvider;
@@ -26,21 +27,36 @@ use InvalidArgumentException;
 final readonly class ReceivedLogoutResponse
 {
     /**
-     * Built by the receivers; outside the compatibility surface of section 5 (section 5.2). Built by hand, it gains
-     * nothing: without a signature it reaches the model's validate(), and with one it needs octets the peer's key
-     * signed.
+     * The model's unverified response, whose Issuer chooses the peer and InResponseTo the request (M-1).
+     */
+    public UnverifiedLogoutResponse $response;
+
+    /**
+     * RelayState, decoded (B-9).
+     */
+    public ?string $relayState;
+
+    /**
+     * HttpRedirect or HttpPost.
+     */
+    public Binding $binding;
+
+    /**
+     * Built by the receivers from one input read whole; outside the compatibility surface of section 5 (section 5.2).
+     * The message and the detached signature are both the reception's, so that the octets the signature covers are
+     * those of the very input the message was decoded from, whoever builds the object (B-5).
      *
-     * @param ?string            $relayState RelayState, decoded (B-9)
-     * @param Binding            $binding    HttpRedirect or HttpPost
-     * @param ?DetachedSignature $signature  the detached signature of a signed query string over HTTP-Redirect, null
-     *                                       otherwise
+     * @throws InvalidArgumentException when $reception holds another message than a LogoutResponse, a programming error
      */
     public function __construct(
-        public UnverifiedLogoutResponse $response,
-        public ?string $relayState,
-        public Binding $binding,
-        private ?DetachedSignature $signature = null,
+        private Reception $reception,
     ) {
+        if (! $reception->message instanceof UnverifiedLogoutResponse) {
+            throw new InvalidArgumentException('A ReceivedLogoutResponse is built from the reception of a LogoutResponse (section 5.2).');
+        }
+        $this->response = $reception->message;
+        $this->relayState = $reception->relayState;
+        $this->binding = $reception->binding;
     }
 
     /**
@@ -68,10 +84,11 @@ final readonly class ReceivedLogoutResponse
         string $receivedAt,
         string $requestId,
     ): AcceptedLogoutResponse {
-        if (! $this->signature instanceof DetachedSignature) {
+        $signature = $this->reception->signature;
+        if (! $signature instanceof DetachedSignature) {
             return $validator->validate($this->response, $peer, $self, $receivedAt, $requestId);
         }
-        $this->signature->verify($peer->verificationKeys());
+        $signature->verify($peer->verificationKeys());
 
         return $validator->validateAuthenticatedByBinding($this->response, $peer, $self, $receivedAt, $requestId);
     }

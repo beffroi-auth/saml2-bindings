@@ -6,6 +6,7 @@ namespace Beffroi\Saml2\Bindings;
 
 use Beffroi\Saml2\Bindings\Exception\NoVerificationKey;
 use Beffroi\Saml2\Bindings\Internal\DetachedSignature;
+use Beffroi\Saml2\Bindings\Internal\Reception;
 use Beffroi\Saml2\Model\Exception\MessageRefused;
 use Beffroi\Saml2\Model\Metadata\Binding;
 use Beffroi\Saml2\Model\Metadata\IdentityProvider;
@@ -14,6 +15,7 @@ use Beffroi\Saml2\Model\Protocol\UnverifiedAuthnRequest;
 use Beffroi\Saml2\Model\Validation\AcceptedAuthnRequest;
 use Beffroi\Saml2\Model\Validation\AuthnRequestValidator;
 use Beffroi\Xml\Core\Exception\RefusedXml;
+use InvalidArgumentException;
 
 /**
  * A samlp:AuthnRequest received at a single sign-on service (section 5.2): the model's unverified request, whose
@@ -25,21 +27,36 @@ use Beffroi\Xml\Core\Exception\RefusedXml;
 final readonly class ReceivedAuthnRequest
 {
     /**
-     * Built by the receivers; outside the compatibility surface of section 5 (section 5.2). Built by hand, it gains
-     * nothing: without a signature it reaches the model's validate(), and with one it needs octets the peer's key
-     * signed.
+     * The model's unverified request, whose Issuer chooses the service provider (M-1).
+     */
+    public UnverifiedAuthnRequest $request;
+
+    /**
+     * RelayState, decoded (B-9).
+     */
+    public ?string $relayState;
+
+    /**
+     * HttpRedirect or HttpPost.
+     */
+    public Binding $binding;
+
+    /**
+     * Built by the receivers from one input read whole; outside the compatibility surface of section 5 (section 5.2).
+     * The message and the detached signature are both the reception's, so that the octets the signature covers are
+     * those of the very input the message was decoded from, whoever builds the object (B-5).
      *
-     * @param ?string            $relayState RelayState, decoded (B-9)
-     * @param Binding            $binding    HttpRedirect or HttpPost
-     * @param ?DetachedSignature $signature  the detached signature of a signed query string over HTTP-Redirect, null
-     *                                       otherwise
+     * @throws InvalidArgumentException when $reception holds another message than an AuthnRequest, a programming error
      */
     public function __construct(
-        public UnverifiedAuthnRequest $request,
-        public ?string $relayState,
-        public Binding $binding,
-        private ?DetachedSignature $signature = null,
+        private Reception $reception,
     ) {
+        if (! $reception->message instanceof UnverifiedAuthnRequest) {
+            throw new InvalidArgumentException('A ReceivedAuthnRequest is built from the reception of an AuthnRequest (section 5.2).');
+        }
+        $this->request = $reception->message;
+        $this->relayState = $reception->relayState;
+        $this->binding = $reception->binding;
     }
 
     /**
@@ -64,10 +81,11 @@ final readonly class ReceivedAuthnRequest
         IdentityProvider $self,
         string $receivedAt,
     ): AcceptedAuthnRequest {
-        if (! $this->signature instanceof DetachedSignature) {
+        $signature = $this->reception->signature;
+        if (! $signature instanceof DetachedSignature) {
             return $validator->validate($this->request, $sp, $self, $receivedAt);
         }
-        $this->signature->verify($sp->verificationKeys());
+        $signature->verify($sp->verificationKeys());
 
         return $validator->validateAuthenticatedByBinding($this->request, $sp, $self, $receivedAt);
     }
