@@ -1,0 +1,20 @@
+# Keycloak as an identity provider (realm idp) and as a service provider (realm sp), the second target of the judge
+# (tests/Interop/keycloak/README.md), copied from saml2-model's harness at commit 9c833c5 under a compose project and a
+# port of this package, so that both harnesses run side by side (saml2-model's answers on 8180).
+#   docker compose -f tests/Interop/keycloak/compose.yaml up -d
+name: saml2-bindings-keycloak
+
+services:
+  keycloak:
+    # the manifest of README.md, section Versions: a tag the registry moves never runs here
+    image: quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c
+    command: ['start-dev', '--http-port=8190', '--import-realm']
+    environment:
+      # Disposable, for kcadm.sh and the admin console of this container only.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    # the loopback only: an admin console with a known password is never offered to the network
+    ports:
+      - '127.0.0.1:8190:8190'
+    volumes:
+      - ./realms:/opt/keycloak/data/import:ro
