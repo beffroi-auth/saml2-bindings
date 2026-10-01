@@ -10,7 +10,12 @@
         "text": ".ci-tools/infection.txt"
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        "Throw_": {
+            "ignoreSourceCodeByRegex": [
+                "throw new LogicException\\('zlib could not start an inflation \\(section 6\\.1\\)\\.'\\);"
+            ]
+        }
     },
     "phpUnit": {
         "configDir": ".ci-tools"
