@@ -24,6 +24,15 @@ use function Castor\run;
 const INFECTION_STRICT_FILES = [
     // Section 5.1: the bounds and their ceilings of section 7 (B-7).
     'src/BindingLimits.php',
+    // Section 5.4: the refusals, each naming its rule (B-11).
+    'src/Exception/BindingRefused.php',
+    'src/Exception/MalformedParameters.php',
+    'src/Exception/MalformedEncoding.php',
+    'src/Exception/InvalidRelayState.php',
+    'src/Exception/XmlSignatureRefused.php',
+    'src/Exception/NoVerificationKey.php',
+    'src/Exception/Unsupported.php',
+    'src/Exception/LimitExceeded.php',
 ];
 
 /**
