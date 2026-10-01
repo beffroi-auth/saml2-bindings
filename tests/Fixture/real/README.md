@@ -1,4 +1,4 @@
-# Real query strings and metadata
+# Real query strings, forms and metadata
 
 Section 9.4 of `spec/bindings.md`: what real implementations sent, bytes as received, named with their origin and the
 date of their capture, verified and validated by `tests/Unit/RealDocumentsTest.php` with a clock frozen at the capture.
