@@ -9,22 +9,23 @@ use Beffroi\Saml2\Bindings\Tests\Unit\ReceptionFixtures;
 use Beffroi\Saml2\Model\Protocol\UnverifiedAuthnRequest;
 use Beffroi\Saml2\Model\Protocol\UnverifiedLogoutRequest;
 use Beffroi\Saml2\Model\Protocol\UnverifiedLogoutResponse;
+use Beffroi\Saml2\Model\Protocol\UnverifiedResponse;
 use Beffroi\Saml2\Model\SamlLoader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Section 6.1 steps 3 and 11, B-1, M-1: the message parameters each service of ours takes, and the model's unverified
- * message it reads, by service and by parameter. SAML Bindings §3.4.4.1.
+ * Sections 6.1 steps 3 and 11 and 6.2 steps 2 and 6, B-1, M-1: the message parameters each service of ours takes, and
+ * the model's unverified message it reads, by service and by parameter. SAML Bindings §3.4.4.1, §3.5.4.
  */
 final class ServiceTest extends TestCase
 {
     use ReceptionFixtures;
 
     /**
-     * Section 6.1 step 3, B-1, SAML Bindings §3.4.4.1: a single sign-on service takes a SAMLRequest, a single logout
-     * service either message parameter.
+     * Sections 6.1 step 3 and 6.2 step 2, B-1, SAML Bindings §3.4.4.1, §3.5.4: a single sign-on service takes a
+     * SAMLRequest, a single logout service either message parameter, an assertion consumer service a SAMLResponse.
      *
      * @param list<string> $messageParameters
      */
@@ -43,11 +44,13 @@ final class ServiceTest extends TestCase
     {
         yield 'a single sign-on service' => [Service::SingleSignOn, ['SAMLRequest']];
         yield 'a single logout service' => [Service::SingleLogout, ['SAMLRequest', 'SAMLResponse']];
+        yield 'an assertion consumer service' => [Service::AssertionConsumer, ['SAMLResponse']];
     }
 
     /**
-     * Section 6.1 step 11, M-1, SAML Bindings §3.4.4.1: the message read, an AuthnRequest at a single sign-on service, a
-     * LogoutRequest in a SAMLRequest and a LogoutResponse in a SAMLResponse at a single logout service.
+     * Sections 6.1 step 11 and 6.2 step 6, M-1, SAML Bindings §3.4.4.1, §3.5.4: the message read, an AuthnRequest at a
+     * single sign-on service, a LogoutRequest in a SAMLRequest and a LogoutResponse in a SAMLResponse at a single logout
+     * service, a Response at an assertion consumer service.
      *
      * @param 'SAMLRequest'|'SAMLResponse' $messageParameter
      * @param class-string                 $class
@@ -89,6 +92,12 @@ final class ServiceTest extends TestCase
             'SAMLResponse',
             self::LOGOUT_RESPONSE,
             UnverifiedLogoutResponse::class,
+        ];
+        yield 'a Response' => [
+            Service::AssertionConsumer,
+            'SAMLResponse',
+            self::RESPONSE,
+            UnverifiedResponse::class,
         ];
     }
 }

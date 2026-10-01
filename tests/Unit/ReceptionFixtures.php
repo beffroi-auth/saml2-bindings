@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
+use function base64_encode;
 use Beffroi\Saml2\Bindings\Internal\Reception;
 use Beffroi\Saml2\Bindings\Internal\Service;
+use Beffroi\Saml2\Bindings\PostReceiver;
 use Beffroi\Saml2\Bindings\RedirectReceiver;
+use Beffroi\Saml2\Bindings\Tests\Support\BrowserForm;
 use Beffroi\Saml2\Bindings\Tests\Support\FrozenClock;
+use Beffroi\Saml2\Bindings\Tests\Support\InMemoryReplayGuard;
 use Beffroi\Saml2\Bindings\Tests\Support\RedirectQuery;
 use Beffroi\Saml2\Bindings\Tests\Support\TestKeys;
 use Beffroi\Saml2\Bindings\Tests\Unit\Internal\CodecFixtures;
@@ -19,16 +23,20 @@ use Beffroi\Saml2\Model\Metadata\IndexedEndpoints;
 use Beffroi\Saml2\Model\Metadata\ServiceProvider;
 use Beffroi\Saml2\Model\SamlLoader;
 use Beffroi\Saml2\Model\Validation\AuthnRequestValidator;
+use Beffroi\Saml2\Model\Validation\ExpectedResponse;
 use Beffroi\Saml2\Model\Validation\LogoutRequestValidator;
 use Beffroi\Saml2\Model\Validation\LogoutResponseValidator;
+use Beffroi\Saml2\Model\Validation\ResponseValidator;
 use DateTimeImmutable;
 
 /**
- * What the tests of HTTP-Redirect received share (sections 6.1, 9.2, 9.3): the three messages, the two parties and the
- * model's validators with a clock frozen at the messages' IssueInstant. The messages are saml2-model's, copied byte for
- * byte from tests/Fixture/behaviour/ of its main at 9c833c5: an AuthnRequest of the service provider to the identity
- * provider, signed with the "sp" test key; a LogoutRequest of the identity provider to the service provider, signed
- * with "idp"; a LogoutResponse of the service provider to the identity provider, signed with "sp". The hostile
+ * What the tests of HTTP-Redirect and HTTP-POST received share (sections 6.1, 6.2, 9.2, 9.3): the four messages, the
+ * two parties and the model's validators with a clock frozen at the messages' IssueInstant. The messages are
+ * saml2-model's, copied byte for byte from tests/Fixture/behaviour/ of its main at 9c833c5: an AuthnRequest of the
+ * service provider to the identity provider, signed with the "sp" test key; a LogoutRequest of the identity provider to
+ * the service provider, signed with "idp"; a LogoutResponse of the service provider to the identity provider, signed
+ * with "sp"; a samlp:Response of the identity provider to the service provider's assertion consumer service, answering
+ * the request _request, its assertion signed with "idp", response-signed-assertion-accepted.xml. The hostile
  * documents of tests/Fixture/hostile/ are copies too, renamed for the refusal they exist for: the AuthnRequest signed
  * in XML is the model's behaviour/authn-request-signed.xml, the samlp:Response its
  * behaviour/response-signed-assertion-accepted.xml; the DOCTYPE is the unsigned AuthnRequest with one line added.
@@ -43,6 +51,13 @@ trait ReceptionFixtures
 
     public const string LOGOUT_RESPONSE = 'behaviour/logout-response-written-for-http-redirect.xml';
 
+    public const string RESPONSE = 'behaviour/response-signed-assertion-accepted.xml';
+
+    /**
+     * The ID of the AuthnRequest the response of RESPONSE answers.
+     */
+    public const string RESPONSE_REQUEST_ID = '_request';
+
     /**
      * The ID of the LogoutRequest the LogoutResponse answers.
      */
@@ -54,9 +69,34 @@ trait ReceptionFixtures
 
     public const string SP_SLO = 'https://sp.example.com/saml/slo';
 
+    public const string ACS = 'https://sp.example.com/saml/acs';
+
     private static function receiver(): RedirectReceiver
     {
         return new RedirectReceiver(SamlLoader::create());
+    }
+
+    private static function postReceiver(): PostReceiver
+    {
+        return new PostReceiver(SamlLoader::create());
+    }
+
+    /**
+     * The fields of a form carrying $message, base64-encoded on one line, in $field, then $relayState when given, as a
+     * browser posts them and PHP's parser gives them to the consumer (section 6.8).
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function form(string $field, string $message, ?string $relayState = null): array
+    {
+        return BrowserForm::posted(
+            $relayState === null
+                ? [[$field, base64_encode($message)]]
+                : [
+                    [$field,       base64_encode($message)],
+                    ['RelayState', $relayState],
+                ],
+        );
     }
 
     /**
@@ -65,6 +105,15 @@ trait ReceptionFixtures
     private static function reception(RedirectQuery $query, Service $service): Reception
     {
         return Reception::ofQueryString($query->toString(), $service, SamlLoader::create(), 8_192, 65_536);
+    }
+
+    /**
+     * The form carrying $message in $field read whole for $service under the default bound of section 7, as
+     * PostReceiver reads it.
+     */
+    private static function formReception(string $field, string $message, Service $service): Reception
+    {
+        return Reception::ofForm(self::form($field, $message), $service, SamlLoader::create(), 1_572_864);
     }
 
     /**
@@ -86,7 +135,7 @@ trait ReceptionFixtures
             'https://sp.example.com/saml',
             $certificates,
             [],
-            new IndexedEndpoints([new IndexedEndpoint(Binding::HttpPost, 'https://sp.example.com/saml/acs', 0, true)]),
+            new IndexedEndpoints([new IndexedEndpoint(Binding::HttpPost, self::ACS, 0, true)]),
             [new Endpoint(Binding::HttpRedirect, self::SP_SLO)],
         );
     }
@@ -100,7 +149,7 @@ trait ReceptionFixtures
             'https://sp.example.com/saml',
             [TestKeys::certificate('sp')],
             [],
-            new IndexedEndpoints([new IndexedEndpoint(Binding::HttpPost, 'https://sp.example.com/saml/acs', 0, true)]),
+            new IndexedEndpoints([new IndexedEndpoint(Binding::HttpPost, self::ACS, 0, true)]),
             [new Endpoint(Binding::HttpRedirect, self::SP_SLO)],
             [],
             true,
@@ -160,5 +209,27 @@ trait ReceptionFixtures
             SamlLoader::create(),
             new FrozenClock(new DateTimeImmutable('2026-09-30T12:00:00Z')),
         );
+    }
+
+    /**
+     * The response validator of the service provider, its clock at $now, the IssueInstant of the response of RESPONSE
+     * by default, and a replay guard of its own.
+     */
+    private static function responseValidator(string $now = '2026-09-30T12:00:00Z'): ResponseValidator
+    {
+        return new ResponseValidator(
+            SamlLoader::create(),
+            new FrozenClock(new DateTimeImmutable($now)),
+            new InMemoryReplayGuard(),
+        );
+    }
+
+    /**
+     * What the service provider expects of a response to the AuthnRequest $requestId, received at its assertion
+     * consumer service, for its entity ID.
+     */
+    private static function expectedResponse(string $requestId = self::RESPONSE_REQUEST_ID): ExpectedResponse
+    {
+        return ExpectedResponse::toRequest($requestId, self::ACS, 'https://sp.example.com/saml');
     }
 }

@@ -155,6 +155,11 @@ final class ReceivedLogoutResponseTest extends TestCase
             RedirectQuery::carrying('SAMLRequest', self::fixture(self::LOGOUT_REQUEST)),
             Service::SingleLogout,
         )];
+        yield 'the reception of a Response, over HTTP-POST' => [self::formReception(
+            'SAMLResponse',
+            self::fixture(self::RESPONSE),
+            Service::AssertionConsumer,
+        )];
     }
 
     private function query(): RedirectQuery

@@ -8,10 +8,16 @@ use function array_filter;
 use function array_intersect;
 use function array_map;
 use function array_values;
+use function base64_encode;
+use Beffroi\Saml2\Bindings\Exception\Unsupported;
+use Beffroi\Saml2\Bindings\Internal\Reception;
 use Beffroi\Saml2\Bindings\Internal\Service;
 use Beffroi\Saml2\Bindings\ReceivedAuthnRequest;
 use Beffroi\Saml2\Bindings\ReceivedLogoutResponse;
+use Beffroi\Saml2\Bindings\ReceivedResponse;
+use Beffroi\Saml2\Bindings\Tests\Support\BrowserForm;
 use Beffroi\Saml2\Bindings\Tests\Support\RedirectQuery;
+use Beffroi\Saml2\Model\SamlLoader;
 use Beffroi\Xml\Dsig\Exception\SignatureMismatch;
 use function count;
 use function dirname;
@@ -22,6 +28,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
+use function rawurldecode;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SensitiveParameter;
@@ -50,8 +57,9 @@ use const T_USE;
  * the private constructor of Reception, whose factories take the raw input alone, and each Received* class is built
  * from a Reception and from nothing else; tried through every path a consumer can reach, the public constructors and
  * the factories with any argument their types allow, a message never travels with the octets another message's
- * signature covers. PHP closes the paths around the types: a readonly property is not modified by a clone from outside
- * its class, and a document, whose DOM refuses serialization, never travels as bytes. SAML Bindings §3.4.4.1.
+ * signature covers, and a form, which carries no detached signature, never brings one. PHP closes the paths around the
+ * types: a readonly property is not modified by a clone from outside its class, and a document, whose DOM refuses
+ * serialization, never travels as bytes. SAML Bindings §3.4.4.1, §3.5.4.
  *
  * @phpstan-type Path 'receiver, authnRequest()'|'by hand, ReceivedAuthnRequest'|'receiver, logoutMessage()'|'by hand, ReceivedLogoutResponse'
  */
@@ -109,7 +117,8 @@ final class PairingTest extends TestCase
     }
 
     /**
-     * B-5, section 5.2: the factories of Reception take the raw input, neither a message nor a signature.
+     * B-5, section 5.2: the factories of Reception, one per binding, take the raw input, neither a message nor a
+     * signature.
      */
     #[Test]
     public function itBuildsAReceptionFromTheRawInputAlone(): void
@@ -130,7 +139,10 @@ final class PairingTest extends TestCase
         );
 
         // Then
-        static::assertNotSame([], $factories);
+        static::assertSame(
+            ['ofQueryString', 'ofForm'],
+            array_values(array_map(static fn (array $function): string => $function['name'], $factories)),
+        );
         static::assertSame([], $taking);
     }
 
@@ -141,6 +153,7 @@ final class PairingTest extends TestCase
     #[TestWith(['ReceivedAuthnRequest.php'], 'ReceivedAuthnRequest')]
     #[TestWith(['ReceivedLogoutRequest.php'], 'ReceivedLogoutRequest')]
     #[TestWith(['ReceivedLogoutResponse.php'], 'ReceivedLogoutResponse')]
+    #[TestWith(['ReceivedResponse.php'], 'ReceivedResponse')]
     public function itBuildsAReceivedMessageFromAReceptionAlone(string $file): void
     {
         // When
@@ -217,6 +230,77 @@ final class PairingTest extends TestCase
             'by hand, ReceivedLogoutResponse',
             $response,
         ];
+    }
+
+    /**
+     * B-5, section 6.2 step 1, section 8, SAML Bindings §3.5.4: a form never pairs a message with a detached
+     * signature: the SigAlg and the Signature of a query string the peer signed, posted next to a message, through every
+     * path a consumer can reach, the receiver or a received message built by hand from the reception of the form, are
+     * refused before the message is read.
+     *
+     * @param 'receiver, authnRequest()'|'by hand, ReceivedAuthnRequest'|'receiver, logoutMessage()'|'by hand, ReceivedLogoutResponse'|'receiver, response()'|'by hand, ReceivedResponse' $path
+     * @param array<array-key, mixed> $form
+     */
+    #[Test]
+    #[DataProvider('provideFormsWithTheSignatureOfAQueryString')]
+    public function itNeverPairsAFormWithADetachedSignature(string $path, array $form): void
+    {
+        // Then
+        $this->expectException(Unsupported::class);
+        $this->expectExceptionMessageIs('SigAlg or Signature in a form is refused: HTTP-POST carries no detached signature (section 8).');
+
+        // When
+        match ($path) {
+            'receiver, authnRequest()' => self::postReceiver()->authnRequest($form),
+            'by hand, ReceivedAuthnRequest' => new ReceivedAuthnRequest($this->formOf($form, Service::SingleSignOn)),
+            'receiver, logoutMessage()' => self::postReceiver()->logoutMessage($form),
+            'by hand, ReceivedLogoutResponse' => new ReceivedLogoutResponse($this->formOf(
+                $form,
+                Service::SingleLogout,
+            )),
+            'receiver, response()' => self::postReceiver()->response($form),
+            'by hand, ReceivedResponse' => new ReceivedResponse($this->formOf($form, Service::AssertionConsumer)),
+        };
+    }
+
+    /**
+     * @return iterable<string, array{string, array<array-key, mixed>}>
+     */
+    public static function provideFormsWithTheSignatureOfAQueryString(): iterable
+    {
+        $signed = RedirectQuery::carrying('SAMLResponse', self::fixture(self::LOGOUT_RESPONSE))
+            ->withRelayState('state')
+            ->signed();
+        $signature = [
+            ['RelayState', 'state'],
+            ['SigAlg', rawurldecode($signed->value('SigAlg'))],
+            ['Signature', rawurldecode($signed->value('Signature'))],
+        ];
+        $request = BrowserForm::posted([
+            ['SAMLRequest', base64_encode(self::fixture(self::AUTHN_REQUEST))],
+            ...$signature,
+        ]);
+        $logoutResponse = BrowserForm::posted([
+            ['SAMLResponse', base64_encode(self::fixture(self::LOGOUT_RESPONSE))],
+            ...$signature,
+        ]);
+        $response = BrowserForm::posted([
+            ['SAMLResponse', base64_encode(self::fixture(self::RESPONSE))],
+            ...$signature,
+        ]);
+
+        yield 'the receiver, an AuthnRequest' => ['receiver, authnRequest()', $request];
+        yield 'a ReceivedAuthnRequest built by hand' => ['by hand, ReceivedAuthnRequest', $request];
+        yield 'the receiver, the LogoutResponse the query string signed' => [
+            'receiver, logoutMessage()',
+            $logoutResponse,
+        ];
+        yield 'a ReceivedLogoutResponse built by hand, the LogoutResponse the query string signed' => [
+            'by hand, ReceivedLogoutResponse',
+            $logoutResponse,
+        ];
+        yield 'the receiver, a Response' => ['receiver, response()', $response];
+        yield 'a ReceivedResponse built by hand' => ['by hand, ReceivedResponse', $response];
     }
 
     /**
@@ -307,6 +391,16 @@ final class PairingTest extends TestCase
             self::IDP_SLO,
             self::LOGOUT_REQUEST_ID,
         );
+    }
+
+    /**
+     * $form read whole for $service under the default bound of section 7, as PostReceiver reads it.
+     *
+     * @param array<array-key, mixed> $form
+     */
+    private function formOf(array $form, Service $service): Reception
+    {
+        return Reception::ofForm($form, $service, SamlLoader::create(), 1_572_864);
     }
 
     /**
