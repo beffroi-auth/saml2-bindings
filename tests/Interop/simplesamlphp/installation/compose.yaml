@@ -1,0 +1,33 @@
+# SimpleSAMLphp as an identity provider on http://localhost:8091 and as a service provider on
+# http://localhost:8092, from one image (tests/Interop/simplesamlphp/README.md), copied from saml2-model's harness at
+# commit 9c833c5 under a compose project and ports of this package, so that both harnesses run side by side
+# (saml2-model's answers on 8081 and 8082). The identity provider publishes its services as SimpleSAMLphp does by
+# default, HTTP-Redirect alone. Both parties read the metadata of this package's roles from ../written/, mounted
+# read-only, once the exchange has written it there.
+name: saml2-bindings-simplesamlphp
+
+services:
+  idp:
+    build: .
+    image: saml2-bindings-simplesamlphp:2.5.3.1
+    ports:
+      - "127.0.0.1:8091:80"
+    volumes:
+      - ./idp/config:/var/simplesamlphp/config:ro
+      - ./idp/metadata:/var/simplesamlphp/metadata:ro
+      - ./cert:/var/simplesamlphp/cert:ro
+      - ../written:/var/simplesamlphp/bindings:ro
+
+  sp:
+    build: .
+    image: saml2-bindings-simplesamlphp:2.5.3.1
+    depends_on:
+      - idp
+    ports:
+      - "127.0.0.1:8092:80"
+    volumes:
+      - ./sp/config:/var/simplesamlphp/config:ro
+      - ./sp/metadata:/var/simplesamlphp/metadata:ro
+      - ./cert:/var/simplesamlphp/cert:ro
+      - ../written:/var/simplesamlphp/bindings:ro
+      - ./sp/session.php:/var/simplesamlphp/public/session.php:ro
