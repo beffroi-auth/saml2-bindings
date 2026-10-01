@@ -43,6 +43,8 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/Deflater.php',
     // B-2: the signed octets, the raw values in the binding's order.
     'src/Internal/SignedOctets.php',
+    // B-4: the detached signature, verified under the keys of the peer's metadata.
+    'src/Internal/DetachedSignature.php',
 ];
 
 /**
