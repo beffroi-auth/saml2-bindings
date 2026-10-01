@@ -35,6 +35,8 @@ const INFECTION_STRICT_FILES = [
     'src/Exception/LimitExceeded.php',
     // B-8: the percent codec, the one place a percent-escape is read or written.
     'src/Internal/Percent.php',
+    // B-8: base64 in its one form, the one place it is decoded.
+    'src/Internal/Base64.php',
 ];
 
 /**
