@@ -39,6 +39,8 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/Base64.php',
     // B-7, B-8: the bounded inflater, raw DEFLATE refused as soon as its output exceeds the bound.
     'src/Internal/Inflater.php',
+    // B-8: the deflater, raw DEFLATE.
+    'src/Internal/Deflater.php',
 ];
 
 /**

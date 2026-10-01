@@ -13,7 +13,8 @@
         "@default": true,
         "Throw_": {
             "ignoreSourceCodeByRegex": [
-                "throw new LogicException\\('zlib could not start an inflation \\(section 6\\.1\\)\\.'\\);"
+                "throw new LogicException\\('zlib could not start an inflation \\(section 6\\.1\\)\\.'\\);",
+                "throw new LogicException\\('zlib could not deflate the message \\(section 6\\.3\\)\\.'\\);"
             ]
         }
     },
