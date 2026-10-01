@@ -101,8 +101,7 @@ final class RealDocumentsTest extends TestCase
         // When
         $accepted = $received->validate(
             new AuthnRequestValidator(SamlLoader::create(), self::clock($capturedAt)),
-            self::metadata($serviceProvider, $capturedAt)->serviceProvider
-                ?? throw new LogicException('The metadata holds a service provider.'),
+            self::serviceProvider($serviceProvider, $capturedAt),
             $self,
             $receivedAt,
         );
@@ -203,8 +202,7 @@ final class RealDocumentsTest extends TestCase
         // When
         $accepted = $received->validate(
             new LogoutRequestValidator(SamlLoader::create(), self::clock($capturedAt)),
-            self::metadata($serviceProvider, $capturedAt)->serviceProvider
-                ?? throw new LogicException('The metadata holds a service provider.'),
+            self::serviceProvider($serviceProvider, $capturedAt),
             $self,
             $receivedAt,
         );
@@ -345,9 +343,10 @@ final class RealDocumentsTest extends TestCase
 
         // Then
         static::assertSame(
-            [Authentication::Binding, '_10f52db37594bc20921006c87338d15333d7b87d26', StatusCode::Success, 'bindings logout ~'],
-            [$accepted->authentication, $accepted->response->id, $accepted->response->status->code, $received->relayState],
+            [Authentication::Binding, '_10f52db37594bc20921006c87338d15333d7b87d26', StatusCode::Success],
+            [$accepted->authentication, $accepted->response->id, $accepted->response->status->code],
         );
+        static::assertSame('bindings logout ~', $received->relayState);
     }
 
     /**
@@ -377,14 +376,10 @@ final class RealDocumentsTest extends TestCase
 
         // Then
         static::assertSame(
-            [
-                Authentication::XmlSignature,
-                '_0b010c354af6627fdaa9649efde479bf3809b86ba2',
-                StatusCode::Success,
-                str_pad('bindings ~ 80 bytes ', 80, '0123456789'),
-            ],
-            [$accepted->authentication, $accepted->response->id, $accepted->response->status->code, $received->relayState],
+            [Authentication::XmlSignature, '_0b010c354af6627fdaa9649efde479bf3809b86ba2', StatusCode::Success],
+            [$accepted->authentication, $accepted->response->id, $accepted->response->status->code],
         );
+        static::assertSame(str_pad('bindings ~ 80 bytes ', 80, '0123456789'), $received->relayState);
     }
 
     /**
@@ -427,8 +422,7 @@ final class RealDocumentsTest extends TestCase
     {
         yield 'to default-sp, 1 October 2026' => [
             'real/simplesamlphp-2.5.3.1-idp-logoutresponse-unsigned-refused-query-2026-10-01.txt',
-            self::metadata('real/simplesamlphp-2.5.3.1-sp-metadata-default-sp-2026-10-01.xml', self::OCTOBER_1)->serviceProvider
-                ?? throw new LogicException('The metadata holds a service provider.'),
+            self::serviceProvider('real/simplesamlphp-2.5.3.1-sp-metadata-default-sp-2026-10-01.xml', self::OCTOBER_1),
             self::SP . 'saml2-logout.php/default-sp',
             '_464dfd53054123a49d09b10f32d28e15f7a3d3129b',
         ];
@@ -456,15 +450,24 @@ final class RealDocumentsTest extends TestCase
     }
 
     /**
+     * A service provider of SimpleSAMLphp, its metadata as served.
+     */
+    private static function serviceProvider(string $fixture, string $capturedAt): ServiceProvider
+    {
+        $descriptor = self::metadata($fixture, $capturedAt);
+
+        return $descriptor->serviceProvider ?? throw new LogicException('The metadata holds a service provider.');
+    }
+
+    /**
      * SimpleSAMLphp's identity provider, its metadata as served on 1 October 2026: HTTP-Redirect alone for its single
      * sign-on and single logout services, its default publication.
      */
     private static function simpleSamlPhpIdentityProvider(): IdentityProvider
     {
-        return (
-            self::metadata('real/simplesamlphp-2.5.3.1-idp-metadata-2026-10-01.xml', self::OCTOBER_1_LOGIN)->identityProvider
-                ?? throw new LogicException('The metadata of the identity provider holds an identity provider.')
-        );
+        $descriptor = self::metadata('real/simplesamlphp-2.5.3.1-idp-metadata-2026-10-01.xml', self::OCTOBER_1_LOGIN);
+
+        return $descriptor->identityProvider ?? throw new LogicException('The metadata holds an identity provider.');
     }
 
     /**
