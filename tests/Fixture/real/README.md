@@ -57,3 +57,38 @@ metadata the exchange wrote with the test keys of `tests/Fixture/keys/` (`RealDo
 | `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-query-2026-10-01.txt` | its `LogoutResponse` to `sp`, signed under `sign.logout`, its `RelayState` `bindings logout ~` escaped `bindings+logout+%7E` by PHP's `urlencode()` | 944 |
 | `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-unsigned-refused-query-2026-10-01.txt` | its `LogoutResponse` to `sp-defaults`, under its defaults, unsigned, no `RelayState` since none was sent: refused by the model (`SignatureRequired`, M-2) | 467 |
 | `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-form-2026-10-01.txt` | its `LogoutResponse` to `sp-post`, whose single logout service is published for HTTP-POST alone, signed in its XML under `sign.logout`, its `RelayState` of 80 bytes echoed | 3 987 |
+
+## Keycloak 26.7.4, 1 October 2026
+
+Captured by the judge's second target (`tests/Interop/keycloak/`, section 9.5 of the specification), run with
+`castor keycloak --keep` on PHP 8.5.10 between 11:37:23 and 11:37:38 UTC, from a stopped Keycloak, the capture and the
+exchange in one start, the messages issued between 11:37:35.702 and 11:37:37.181 UTC. Keycloak generates the keys of
+its realms at every start: the metadata of this run, kept with its captures, are the ones that verify them. A query
+string and a form are kept as for SimpleSAMLphp above, once this package had read them and the model had validated
+them, or refused them as the table says.
+
+`capture.php`: realm sp's broker `idp` and realm idp, as `realms/` configures them, the broker under its defaults.
+
+| File | What | Bytes |
+|---|---|---|
+| `keycloak-26.7.4-idp-metadata-2026-10-01.xml` | realm idp's metadata as served, its key of this run, HTTP-POST, HTTP-Redirect, SOAP and HTTP-Artifact for its single sign-on and single logout services, `WantAuthnRequestsSigned="true"` | 3 374 |
+| `keycloak-26.7.4-sp-metadata-2026-10-01.xml` | the broker `idp`'s metadata as served, no `KeyDescriptor`, `AuthnRequestsSigned="false"` | 1 506 |
+| `keycloak-26.7.4-sp-authnrequest-unsigned-refused-query-2026-10-01.txt` | the broker's `AuthnRequest`, unsigned, `SAMLRequest` and `RelayState` (78 bytes): read, then refused by the model (`SignatureRequired`, M-3: realm idp wants it signed, the broker publishes no key) | 626 |
+| `keycloak-26.7.4-idp-response-form-2026-10-01.txt` | realm idp's response to it, the response signed and not the assertion, its `RelayState` echoed | 7 751 |
+| `keycloak-26.7.4-sp-logoutrequest-unsigned-refused-query-2026-10-01.txt` | the broker's `LogoutRequest`, unsigned, its `RelayState` of 24 bytes: read, then refused by the model (`SignatureRequired`, M-3) | 580 |
+| `keycloak-26.7.4-idp-logoutresponse-form-2026-10-01.txt` | realm idp's `LogoutResponse` to it, signed in its XML | 3 697 |
+
+`exchange.php`: realm sp's broker `bindings` and realm idp's client, configured by Keycloak's importers from the
+metadata of this package's roles at `https://idp.saml2-bindings.test/` and `https://sp.saml2-bindings.test/`, written
+with the test keys of `tests/Fixture/keys/` (`RealDocumentsTest` builds the same roles).
+
+| File | What | Bytes |
+|---|---|---|
+| `keycloak-26.7.4-sp-metadata-for-bindings-2026-10-01.xml` | the broker `bindings`'s metadata as served, the key of realm sp, `AuthnRequestsSigned="true"`, `WantAssertionsSigned="true"`; the same, but for its `ID`, before and after its "HTTP-POST binding response" is switched on | 2 625 |
+| `keycloak-26.7.4-sp-authnrequest-to-bindings-redirect-binding-refused-query-2026-10-01.txt` | the broker's `AuthnRequest` as import-config set it from metadata listing HTTP-Redirect alone, signed: verified, then refused by the model, its `ProtocolBinding` HTTP-Redirect (`Unsupported`, model.md section 8) | 1 100 |
+| `keycloak-26.7.4-sp-authnrequest-to-bindings-query-2026-10-01.txt` | the broker's `AuthnRequest` once its response is asked over HTTP-POST, signed, its `RelayState` of 78 bytes | 1 096 |
+| `keycloak-26.7.4-sp-logoutrequest-to-bindings-query-2026-10-01.txt` | the broker's `LogoutRequest`, signed, its `RelayState` of 24 bytes | 960 |
+| `keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt` | the broker's `AuthnRequest` for a client of realm sp whose internal ID is not a UUID, its `RelayState` of 122 bytes: refused by the receiver (`InvalidRelayState`, B-9, SAML Bindings §3.4.3) | 1 124 |
+| `keycloak-26.7.4-idp-response-to-bindings-form-2026-10-01.txt` | realm idp's response to this package's service provider, the response signed and not the assertion, its `RelayState` `bindings login ~` echoed | 7 657 |
+| `keycloak-26.7.4-idp-logoutresponse-to-bindings-form-2026-10-01.txt` | realm idp's `LogoutResponse` under its client's "Force POST binding", its default, signed in its XML, its `RelayState` `bindings logout ~` echoed | 3 672 |
+| `keycloak-26.7.4-idp-logoutresponse-to-bindings-query-2026-10-01.txt` | realm idp's `LogoutResponse` once "Force POST binding" is off, over HTTP-Redirect, signed over its query string, its `RelayState` of 80 bytes written with `+` for a space and `~` as it is | 993 |
