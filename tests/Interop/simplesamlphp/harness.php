@@ -300,7 +300,9 @@ final class Run
         if (! is_dir($directory)) {
             mkdir($directory);
         }
-        $this->today = new SystemClock()->now()->format('Y-m-d');
+        $now = new SystemClock()->now();
+        $this->today = $now->format('Y-m-d');
+        $this->say(sprintf('PHP %s, curl %s, %s', PHP_VERSION, curl_version()['version'] ?? '?', $now->format('Y-m-d\TH:i:s\Z')));
     }
 
     public function say(string $line): void
