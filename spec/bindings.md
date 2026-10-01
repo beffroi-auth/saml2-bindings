@@ -507,7 +507,7 @@ spec/bindings.md       this document, the law of the package
 src/                   RedirectReceiver, PostReceiver, RedirectSender, PostSender, PostForm, BindingLimits, the four
                        Received* classes; Exception/; Internal/, marked @internal, outside the compatibility promise of
                        section 5: Percent (the percent codec of B-8), Base64, Inflater (bounded, B-7) and Deflater,
-                       QueryParameters (6.1 steps 2 to 6), FormFields (6.2 steps 1 to 3), SignedOctets (B-2),
+                       QueryParameters (6.1 steps 2 to 7), FormFields (6.2 steps 1 to 3), SignedOctets (B-2),
                        DetachedSignature
 tests/                 Unit/ (one class per public class of src/ and per class of Internal/, plus TraceabilityTest,
                        SourceGuardTest, Exception/RefusalMessagesTest, AdversarialTest; the round trips of 9.1; the
