@@ -386,8 +386,10 @@ section 1, and no rule of the specification had to change for the exchange. What
   metadata says `WantAuthnRequestsSigned="true"` and the broker's publishes no key), kept as fixtures refused. Realm
   `idp` takes them only because its client in `realms/idp.json` does not require a signature.
 - **K-12. Keycloak reads the metadata of this package's roles as the model writes them.** Signed, `KeyInfo` left out of
-  every message: the broker verified this package's response and `LogoutResponse`, and realm `idp` its requests, under
-  the certificates the importers drew from the metadata, as `saml2-model` found over HTTP-POST (its findings 21 to 23).
+  every message: the broker accepted this package's response, its assertion signed, and verified its `LogoutResponse`
+  (K-5), and realm `idp` verified its requests (K-6), under the certificates its importers drew from the metadata. That
+  the broker's acceptance of a response rests on its XML signature is `saml2-model`'s control over HTTP-POST (its
+  finding 21), not played again here.
 
 `RealDocumentsTest` reads every capture of this run with the receivers of this package and validates it with the model
 under a clock frozen at its capture; `tests/Fixture/real/README.md` lists them.
