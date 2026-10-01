@@ -21,7 +21,10 @@ use function Castor\run;
  * whole, uncovered lines included, and fails under a hundred percent. A file joins the list in the commit that
  * creates it, never before: a listed file missing from the tree is an error.
  */
-const INFECTION_STRICT_FILES = [];
+const INFECTION_STRICT_FILES = [
+    // Section 5.1: the bounds and their ceilings of section 7 (B-7).
+    'src/BindingLimits.php',
+];
 
 /**
  * The PHP version of the phpqa image: 8.5, what the package runs on, unless PHP_VERSION says otherwise.
