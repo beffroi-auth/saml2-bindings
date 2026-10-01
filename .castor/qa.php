@@ -53,6 +53,8 @@ const INFECTION_STRICT_FILES = [
     'src/Internal/Service.php',
     // Section 6.1: HTTP-Redirect received, in order (B-6, B-7).
     'src/RedirectReceiver.php',
+    // Section 6.3: HTTP-Redirect sent, in order (B-2, B-6, B-9, B-10, B-12).
+    'src/RedirectSender.php',
     // Section 6.1 step 12: authenticated as the binding says, then validated (B-5).
     'src/ReceivedAuthnRequest.php',
     'src/ReceivedLogoutRequest.php',

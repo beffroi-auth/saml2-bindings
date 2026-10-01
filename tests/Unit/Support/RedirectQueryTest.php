@@ -98,4 +98,24 @@ final class RedirectQueryTest extends TestCase
         // When / Then
         static::assertSame('AB%2fc%3d', RedirectQuery::encodeInLowercase('AB/c='));
     }
+
+    /**
+     * Section 6.1 step 2: a query string read back is split on & and each segment on its first =, the names and the
+     * values kept as written, in order, a segment without = an empty value.
+     */
+    #[Test]
+    public function itReadsAQueryStringBack(): void
+    {
+        // Given
+        $queryString = 'tenant=acme&SAMLRequest=a%2Bb%3D%3D&flag&RelayState=x=y';
+
+        // When
+        $query = RedirectQuery::of($queryString);
+
+        // Then
+        static::assertSame(
+            [['tenant', 'SAMLRequest', 'flag', 'RelayState'], 'a%2Bb%3D%3D', '', 'x=y'],
+            [$query->names(), $query->value('SAMLRequest'), $query->value('flag'), $query->value('RelayState')],
+        );
+    }
 }

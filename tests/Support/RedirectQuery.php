@@ -9,6 +9,7 @@ use function array_map;
 use function array_values;
 use function base64_encode;
 use Beffroi\Xml\Dsig\SignatureAlgorithm;
+use function explode;
 use function gzdeflate;
 use function implode;
 use function is_string;
@@ -42,6 +43,23 @@ final readonly class RedirectQuery
     public static function none(): self
     {
         return new self([]);
+    }
+
+    /**
+     * A query string read back, without its leading "?": split on & and each segment on its first =, as the receiver
+     * splits it (section 6.1 step 2), each name and value kept as written, so that a test reads what a sender wrote. A
+     * segment without = is a name whose value is empty.
+     */
+    public static function of(string $queryString): self
+    {
+        return new self(array_map(
+            static function (string $segment): array {
+                $pair = explode('=', $segment, 2);
+
+                return [$pair[0], $pair[1] ?? ''];
+            },
+            explode('&', $queryString),
+        ));
     }
 
     /**
@@ -179,6 +197,16 @@ final readonly class RedirectQuery
         }
 
         throw new LogicException(sprintf('The query string of the test has no %s.', $name));
+    }
+
+    /**
+     * The names of the parameters, in order.
+     *
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        return array_map(static fn (array $parameter): string => $parameter[0], $this->parameters);
     }
 
     /**
