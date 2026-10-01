@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
 use Beffroi\Saml2\Bindings\Exception\NoVerificationKey;
+use Beffroi\Saml2\Bindings\Internal\Reception;
+use Beffroi\Saml2\Bindings\Internal\Service;
 use Beffroi\Saml2\Bindings\ReceivedLogoutResponse;
 use Beffroi\Saml2\Bindings\Tests\Support\RedirectQuery;
 use Beffroi\Saml2\Model\Exception\SignatureRequired;
-use Beffroi\Saml2\Model\Metadata\Binding;
 use Beffroi\Saml2\Model\Metadata\ServiceProvider;
-use Beffroi\Saml2\Model\Protocol\UnverifiedLogoutResponse;
-use Beffroi\Saml2\Model\SamlLoader;
 use Beffroi\Saml2\Model\Validation\AcceptedLogoutResponse;
 use Beffroi\Saml2\Model\Validation\Authentication;
 use Beffroi\Xml\Dsig\Exception\SignatureMismatch;
+use InvalidArgumentException;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -126,25 +127,34 @@ final class ReceivedLogoutResponseTest extends TestCase
     }
 
     /**
-     * Section 5.2, section 6.2 step 7, SAML Profiles §4.4.4.2: a response built without a detached signature, as
-     * HTTP-POST will build it, goes to the model's validate(), which requires its XML signature.
+     * Section 5.2, B-5: a ReceivedLogoutResponse is built from the reception of a LogoutResponse and of no other message, a programming
+     * error otherwise.
      */
     #[Test]
-    public function itValidatesAResponseCarriedWithoutDetachedSignature(): void
+    #[DataProvider('provideReceptionsOfOtherMessages')]
+    public function itRefusesTheReceptionOfAnotherMessage(Reception $reception): void
     {
-        // Given
-        $received = new ReceivedLogoutResponse(
-            UnverifiedLogoutResponse::of(SamlLoader::create()->load(self::fixture(self::LOGOUT_RESPONSE))),
-            null,
-            Binding::HttpPost,
-        );
-
         // Then
-        $this->expectException(SignatureRequired::class);
-        $this->expectExceptionMessageIs('The message carries no ds:Signature, which the profile requires (M-2).');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('A ReceivedLogoutResponse is built from the reception of a LogoutResponse (section 5.2).');
 
         // When
-        $this->validate($received);
+        new ReceivedLogoutResponse($reception);
+    }
+
+    /**
+     * @return iterable<string, array{Reception}>
+     */
+    public static function provideReceptionsOfOtherMessages(): iterable
+    {
+        yield 'the reception of an AuthnRequest' => [self::reception(
+            RedirectQuery::carrying('SAMLRequest', self::fixture(self::AUTHN_REQUEST)),
+            Service::SingleSignOn,
+        )];
+        yield 'the reception of a LogoutRequest' => [self::reception(
+            RedirectQuery::carrying('SAMLRequest', self::fixture(self::LOGOUT_REQUEST)),
+            Service::SingleLogout,
+        )];
     }
 
     private function query(): RedirectQuery

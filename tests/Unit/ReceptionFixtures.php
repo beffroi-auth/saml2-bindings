@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
+use Beffroi\Saml2\Bindings\Internal\Reception;
+use Beffroi\Saml2\Bindings\Internal\Service;
 use Beffroi\Saml2\Bindings\RedirectReceiver;
 use Beffroi\Saml2\Bindings\Tests\Support\FrozenClock;
+use Beffroi\Saml2\Bindings\Tests\Support\RedirectQuery;
 use Beffroi\Saml2\Bindings\Tests\Support\TestKeys;
 use Beffroi\Saml2\Bindings\Tests\Unit\Internal\CodecFixtures;
 use Beffroi\Saml2\Model\Metadata\Binding;
@@ -54,6 +57,14 @@ trait ReceptionFixtures
     private static function receiver(): RedirectReceiver
     {
         return new RedirectReceiver(SamlLoader::create());
+    }
+
+    /**
+     * $query read whole for $service under the default bounds of section 7, as RedirectReceiver reads it.
+     */
+    private static function reception(RedirectQuery $query, Service $service): Reception
+    {
+        return Reception::ofQueryString($query->toString(), $service, SamlLoader::create(), 8_192, 65_536);
     }
 
     /**

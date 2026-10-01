@@ -6,20 +6,20 @@ namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
 use function base64_encode;
 use Beffroi\Saml2\Bindings\Exception\NoVerificationKey;
+use Beffroi\Saml2\Bindings\Internal\Reception;
+use Beffroi\Saml2\Bindings\Internal\Service;
 use Beffroi\Saml2\Bindings\ReceivedAuthnRequest;
 use Beffroi\Saml2\Bindings\Tests\Support\RedirectQuery;
 use Beffroi\Saml2\Bindings\Tests\Support\TestKeys;
 use Beffroi\Saml2\Model\Exception\SignatureRequired;
-use Beffroi\Saml2\Model\Metadata\Binding;
 use Beffroi\Saml2\Model\Metadata\ServiceProvider;
-use Beffroi\Saml2\Model\Protocol\UnverifiedAuthnRequest;
-use Beffroi\Saml2\Model\SamlLoader;
 use Beffroi\Saml2\Model\Validation\AcceptedAuthnRequest;
 use Beffroi\Saml2\Model\Validation\Authentication;
 use Beffroi\Xml\Dsig\Exception\AlgorithmUnavailable;
 use Beffroi\Xml\Dsig\Exception\LimitExceeded;
 use Beffroi\Xml\Dsig\Exception\SignatureMismatch;
 use Beffroi\Xml\Dsig\SignatureAlgorithm;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -382,27 +382,34 @@ final class ReceivedAuthnRequestTest extends TestCase
     }
 
     /**
-     * Section 5.2, section 6.2 step 7, SAML Bindings §3.5.4: a request built without a detached signature, as HTTP-POST
-     * will build it, keeps its binding and goes to the model's validate().
+     * Section 5.2, B-5: a ReceivedAuthnRequest is built from the reception of an AuthnRequest and of no other message, a programming
+     * error otherwise.
      */
     #[Test]
-    public function itValidatesARequestCarriedWithoutDetachedSignature(): void
+    #[DataProvider('provideReceptionsOfOtherMessages')]
+    public function itRefusesTheReceptionOfAnotherMessage(Reception $reception): void
     {
-        // Given
-        $received = new ReceivedAuthnRequest(
-            UnverifiedAuthnRequest::of(SamlLoader::create()->load(self::fixture(self::AUTHN_REQUEST))),
-            'state',
-            Binding::HttpPost,
-        );
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('A ReceivedAuthnRequest is built from the reception of an AuthnRequest (section 5.2).');
 
         // When
-        $accepted = $this->validate($received);
+        new ReceivedAuthnRequest($reception);
+    }
 
-        // Then
-        static::assertSame(
-            [Authentication::None, Binding::HttpPost, 'state'],
-            [$accepted->authentication, $received->binding, $received->relayState],
-        );
+    /**
+     * @return iterable<string, array{Reception}>
+     */
+    public static function provideReceptionsOfOtherMessages(): iterable
+    {
+        yield 'the reception of a LogoutRequest' => [self::reception(
+            RedirectQuery::carrying('SAMLRequest', self::fixture(self::LOGOUT_REQUEST)),
+            Service::SingleLogout,
+        )];
+        yield 'the reception of a LogoutResponse' => [self::reception(
+            RedirectQuery::carrying('SAMLResponse', self::fixture(self::LOGOUT_RESPONSE)),
+            Service::SingleLogout,
+        )];
     }
 
     private static function query(): RedirectQuery
