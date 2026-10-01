@@ -202,7 +202,7 @@ final readonly class ReceivedAuthnRequest
 | `ReceivedLogoutResponse` | `response`, an `UnverifiedLogoutResponse` | `validate(LogoutResponseValidator $validator, IdentityProvider\|ServiceProvider $peer, IdentityProvider\|ServiceProvider $self, string $receivedAt, string $requestId): AcceptedLogoutResponse` |
 | `ReceivedResponse` | `response`, an `UnverifiedResponse`; HTTP-POST only (B-12) | `validate(ResponseValidator $validator, IdentityProvider $idp, ExpectedResponse $expected): AcceptedAssertion` |
 
-Each also carries `relayState` and `binding`. Their constructor takes one object of `Internal\`, `Reception`, and is outside the compatibility surface; it refuses a `Reception` that holds another message than its own (`\InvalidArgumentException`, a programming error). A `Reception` comes from one input and from nothing else: its constructor is private, and its one factory per binding takes the raw query string, or the form's fields, with the consumer's `Loader`, the bounds and the service the method serves, and does the whole reading itself, the parameters and the octets, the decoding of the very raw value the octets hold, the inflation, the loading and the reading of the unverified message. No path of the package, public or internal, takes a document and a detached signature apart and puts them together. The message a received message validates and the octets of its signature therefore come from one decoding of one input, whoever builds the object (B-5): a consumer that builds one by hand builds it from a query string or a form as the receivers do, and gains nothing.
+Each also carries `relayState` and `binding`. Their constructor takes one object of `Internal\`, `Reception`, and is outside the compatibility surface; it refuses a `Reception` that holds another message than its own (`\InvalidArgumentException`, a programming error). A `Reception` comes from one input and from nothing else: its constructor is private, and its one factory per binding takes the raw query string, or the form's fields, with the consumer's `Loader`, the bounds and the service the method serves, and does the whole reading itself, the parameters and the octets, the decoding of the very raw value the octets hold, the inflation, the loading and the reading of the unverified message. The factory of HTTP-Redirect refuses the assertion consumer service, a programming error (`\InvalidArgumentException`): a response never travels over HTTP-Redirect (B-12), so that the one `Reception` that holds a response is read from a form. No path of the package, public or internal, takes a document and a detached signature apart and puts them together. The message a received message validates and the octets of its signature therefore come from one decoding of one input, whoever builds the object (B-5): a consumer that builds one by hand builds it from a query string or a form as the receivers do, and gains nothing.
 
 ### 5.3 Sending
 
@@ -238,7 +238,17 @@ final readonly class RedirectSender
 
 final readonly class PostSender
 {
-    /** The response, its assertion signed, the response too on request (model.md §5.7) */
+    public function __construct(private BindingLimits $limits = new BindingLimits()) {}
+
+    /**
+     * The form the browser posts: the response's Destination as its action, then SAMLResponse, and RelayState when
+     * given (6.4). The response, its assertion signed, the response too on request (model.md §5.7).
+     *
+     * @throws \InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
+     *                                   missing (6.4 step 1), what the writer refuses so
+     * @throws Exception\LimitExceeded   a base64 text longer than maxFormValueBytes, which the receiver would refuse
+     * @throws \Beffroi\Xml\Core\Exception\RefusedXml what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     */
     public function response(Response $response, Signing $signing, SignedParts $parts = SignedParts::Assertion, ?string $relayState = null): PostForm;
 
     /** A response whose status is not Success, without assertion */
@@ -332,10 +342,12 @@ What the sender writes is what the package's own receiver reads under the same `
 
 `PostSender::response()`, `failure()`, `authnRequest()`, `logoutRequest()` and `logoutResponse()`:
 
-1. **The arguments.** `RelayState` as 6.3 step 1.
+1. **The arguments.** Every check that needs nothing but the arguments, before anything is written or signed, as in 6.3 step 1: a `RelayState` empty or longer than 80 bytes (B-9); an `AuthnRequest` or a `Response` without `Destination`, the form's `action`, which its writer refuses too (M-15): `\InvalidArgumentException`. The `Destination` is not read further: the fields travel in the body of the post, and a query the `action` holds is never read by the package's receiver, unlike the query of a URL of HTTP-Redirect (6.3 step 1).
 2. **The document.** The model's writer with the `Signing` given: `ResponseWriter::write()` or `writeFailure()`, `AuthnRequestWriter::write()`, `LogoutRequestWriter::write()` or `LogoutResponseWriter::write()`, signed in XML (B-12; model.md §6.6).
-3. **The bytes.** `Serializer::serialize()` once (B-10), base64 without line breaks, no DEFLATE.
+3. **The bytes.** `Serializer::serialize()` once (B-10), base64 without line breaks, no DEFLATE; a text longer than `maxFormValueBytes`, which the package's receiver would refuse (6.2 step 2), is `LimitExceeded` (B-7).
 4. **The form.** `PostForm` with the message's `Destination` as `action`, and the fields `SAMLRequest` or `SAMLResponse`, then `RelayState` when given, as they go on the wire. Nothing is escaped for HTML: the page is the consumer's (section 6.7).
+
+What the sender writes is what the package's own receiver reads under the same `BindingLimits`, as over HTTP-Redirect (6.3). The length of the text is known once the writer wrote the message and `Core` serialized it, and over HTTP-POST the writer signs the XML as it writes it: a form value over `maxFormValueBytes` is refused after the key was called, the one refusal of `PostSender` that comes after it. The bound cannot move earlier, since the signature, and its `KeyInfo` when the `Signing` carries a certificate, are part of what is measured.
 
 ### 6.5 The contract with saml2-model
 
@@ -444,8 +456,8 @@ One case per row, a query string, a form or a call, each a variant of a valid ca
 | A deflated message posted in a form | `Core`'s refusal of what is not XML, never inflated (B-8) |
 | A `samlp:Response` over HTTP-Redirect given to `logoutMessage()`; an `AuthnRequest` in a `SAMLResponse`; a `LogoutResponse` in a `SAMLRequest` | the model's `MalformedMessage` |
 | A message `Core` refuses, a `DOCTYPE` among the inflated bytes | `Core`'s `DoctypeRefused`, as it is |
-| A sender given a `RelayState` of 81 bytes or an empty one; an `AuthnRequest` without `Destination`; a `Destination` holding a fragment, or a `SAMLRequest` in its query; the key never called | `\InvalidArgumentException` |
-| A sender whose query string would exceed `maxQueryStringBytes`; whose serialized message is longer than `maxInflatedBytes`, the key never called | `LimitExceeded` (B-7) |
+| A sender given a `RelayState` of 81 bytes or an empty one; an `AuthnRequest` without `Destination`, or a `Response` given to `PostSender`; a `Destination` holding a fragment, or a `SAMLRequest` in its query, given to `RedirectSender`; the key never called | `\InvalidArgumentException` |
+| A sender whose query string would exceed `maxQueryStringBytes`; whose serialized message is longer than `maxInflatedBytes`, the key never called; `PostSender`, whose form value would exceed `maxFormValueBytes` | `LimitExceeded` (B-7) |
 
 ### 9.3 Behaviour corpus
 
