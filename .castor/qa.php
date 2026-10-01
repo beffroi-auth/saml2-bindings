@@ -59,6 +59,9 @@ const INFECTION_STRICT_FILES = [
     'src/PostReceiver.php',
     // Section 6.3: HTTP-Redirect sent, in order (B-2, B-6, B-9, B-10, B-12).
     'src/RedirectSender.php',
+    // Section 6.4: HTTP-POST sent, in order (B-7, B-9, B-10, B-12), and the form it returns (section 6.7).
+    'src/PostSender.php',
+    'src/PostForm.php',
     // Section 6.1 step 12: authenticated as the binding says, then validated (B-5).
     'src/ReceivedAuthnRequest.php',
     'src/ReceivedLogoutRequest.php',
