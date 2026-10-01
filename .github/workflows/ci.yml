@@ -114,6 +114,37 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  oracle:
+    name: "4️⃣ Oracle (OpenSSL)"
+    needs: [quality]
+    # The sender against a verifier that is no SAML library (spec/bindings.md section 9.1): a signed URL for an
+    # AuthnRequest, a LogoutRequest and a LogoutResponse under every algorithm of PHP 8.5, with and without RelayState,
+    # written in the phpqa image next to the document the model's writer wrote for each; every signature verified by
+    # the OpenSSL command line over the octets of the binding built again from the URL, and every message inflated by
+    # Python's zlib to that document, in Alpine, under the certificate of its signer (tests/Fixture/oracle/README.md).
+    # Two images, hence Docker on the runner rather than a job container; castor redirect-oracle is the same on a
+    # workstation.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: "Write the signed URLs with every algorithm of the build"
+        env:
+          # the credential for the private saml2-model and xml-security (see the top of this file)
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+        run: >-
+          docker run --rm -v "$PWD:/project" -w /project -e HOME=/tmp -e COMPOSER_AUTH
+          -e REDIRECT_ORACLE=tmp-phpqa/redirect-oracle
+          ghcr.io/spomky-labs/phpqa:8.5 sh -c 'composer install --no-interaction --no-progress --quiet
+          && composer exec -- phpunit --configuration .ci-tools/phpunit.xml.dist --filter RedirectSenderOracleTest'
+      - name: "Verify every signature with OpenSSL and inflate every message with Python"
+        run: >-
+          docker run --rm -v "$PWD:/project:ro" -w /project alpine:3.22
+          sh -c 'apk add -q openssl python3 && openssl version && python3 --version
+          && sh tests/Fixture/oracle/verify-redirect.sh tests/Fixture/keys/sp-signing-certificate.pem
+          tmp-phpqa/redirect-oracle/sp-*.url
+          && sh tests/Fixture/oracle/verify-redirect.sh tests/Fixture/keys/idp-signing-certificate.pem
+          tmp-phpqa/redirect-oracle/idp-*.url'
+
   infection:
     name: "3️⃣ Mutation Testing"
     needs: [tests]
