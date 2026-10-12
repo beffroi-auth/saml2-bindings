@@ -21,7 +21,8 @@ docker run --rm -v "$PWD:/project" -w /project ghcr.io/spomky-labs/phpqa:8.5 \
 
 RSA PKCS#1 v1.5 signatures are deterministic, so the command writes the committed bytes again, and the adversarial test
 compares what the builder writes with every committed file. Run on 1 October 2026 in the phpqa image, PHP 8.5.10; every
-attempt has the same outcome on PHP 8.4.25.
+attempt has the same outcome on PHP 8.4.25. Run again on 12 October 2026 on PHP 8.5.11 and 8.4.25, the same bytes, every
+attempt with the outcome its name now says on both.
 
 The messages are those of `tests/Unit/ReceptionFixtures.php`: the `AuthnRequest` of `https://sp.example.com/saml` to
 `https://idp.example.com/saml/sso`, issued at `2026-10-01T12:00:00Z`, signed over the query string with the `sp` key,

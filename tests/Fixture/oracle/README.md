@@ -9,10 +9,11 @@ and the message must inflate to the very document the model's writer wrote for i
 `tests/Unit/RedirectSenderOracleTest.php` writes, into the directory `REDIRECT_ORACLE` names, a signed URL for an
 `AuthnRequest` of the service provider, a `LogoutRequest` of the identity provider and a `LogoutResponse` of the
 service provider, under every algorithm the build has (RSA with SHA-256, SHA-384 and SHA-512, and their RSASSA-PSS
-forms on PHP 8.5 with OpenSSL 3.1), each without `RelayState` and with one of 80 bytes, plus an `AuthnRequest` to a
-`Destination` holding its own query: `<signer>-<message>-<algorithm>[-relay-state].url`, each next to the document
-its message must inflate to, the same name ending in `.xml`. A PSS signature is random, so nothing here is pinned: the
-URLs are written again on every run, 37 of them on PHP 8.5, 19 on PHP 8.4.
+forms on PHP 8.5 with OpenSSL 3.1), each without `RelayState`, with one of 80 bytes and with one of 1 024 bytes, the
+bound of B-9, every byte escaped, plus an `AuthnRequest` to a `Destination` holding its own query:
+`<signer>-<message>-<algorithm>[-relay-state[-1024-bytes]].url`, each next to the document its message must inflate
+to, the same name ending in `.xml`. A PSS signature is random, so nothing here is pinned: the URLs are written again on
+every run, 55 of them on PHP 8.5, 28 on PHP 8.4.
 
 - `read-redirect-url.py` reads one URL with Python alone: the query after the first `?`, split on `&` and each segment
   on its first `=`; the octets `SAMLRequest=` or `SAMLResponse=` and its raw value, then `&RelayState=` and its raw
@@ -59,4 +60,6 @@ Measured on 1 October 2026, `castor redirect-oracle` on PHP 8.5.10 (OpenSSL 3.5.
 Alpine 3.22 with OpenSSL 3.5.9 and Python 3.12.14: the 37 URLs verified, the PSS ones under
 `rsa_pss_saltlen:digest`. The same scripts refuse a URL whose `RelayState` was changed after signing (OpenSSL's
 `Verification failure`), a document that differs by one byte from the inflated message (`cmp`), and a URL verified
-under the other party's certificate.
+under the other party's certificate. Measured again on 12 October 2026, once the `RelayState` of 1 024 bytes had joined
+them, `castor redirect-oracle` on PHP 8.5.11 and on PHP 8.4.25 (OpenSSL 3.5.7 in the phpqa images), verified in Alpine
+3.22 with OpenSSL 3.5.9 and Python 3.12.15: the 55 URLs and the 28 verified.
