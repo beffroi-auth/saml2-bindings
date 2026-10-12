@@ -31,12 +31,6 @@ final readonly class SignedOctets
      */
     public function __construct(string $messageParameter, string $message, ?string $relayState, string $sigAlg)
     {
-        $this->bytes =
-            $messageParameter
-            . '='
-            . $message
-            . ($relayState === null ? '' : '&RelayState=' . $relayState)
-            . '&SigAlg='
-            . $sigAlg;
+        $this->bytes = $messageParameter . '=' . $message . ($relayState === null ? '' : '&RelayState=' . $relayState) . '&SigAlg=' . $sigAlg;
     }
 }
