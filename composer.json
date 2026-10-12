@@ -1,9 +1,8 @@
 {
-    "name": "beffroi-php/saml2-bindings",
-    "description": "The HTTP-Redirect and HTTP-POST bindings of SAML 2.0 for PHP, on beffroi-php/saml2-model and beffroi-php/xml-security: a query string or a form decoded into the document the model reads, the detached signature of HTTP-Redirect verified over the octets the sender signed and nothing else, and a message the model writes turned into a URL or a form's fields. Strings and arrays in and out, no HTTP object.",
+    "name": "beffroi/saml2-bindings",
+    "description": "The HTTP-Redirect and HTTP-POST bindings of SAML 2.0 for PHP, on beffroi/saml2-model and beffroi/xml-security: a query string or a form decoded into the document the model reads, the detached signature of HTTP-Redirect verified over the octets the sender signed and nothing else, and a message the model writes turned into a URL or a form's fields. Strings and arrays in and out, no HTTP object.",
     "type": "library",
     "license": "MIT",
-    "homepage": "https://github.com/beffroi-php/saml2-bindings",
     "keywords": [
         "saml",
         "saml2",
@@ -21,40 +20,20 @@
             "name": "All contributors"
         }
     ],
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/beffroi-php/saml2-model.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/beffroi-php/xml-security.git"
-        }
-    ],
     "require": {
         "php": ">=8.4",
         "ext-zlib": "*",
-        "beffroi-php/saml2-model": "dev-main",
-        "beffroi-php/xml-security": "dev-main"
+        "beffroi/saml2-model": "self.version",
+        "beffroi/xml-security": "self.version"
     },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
     "autoload": {
         "psr-4": {
             "Beffroi\\Saml2\\Bindings\\": "src/"
         }
     },
-    "autoload-dev": {
-        "psr-4": {
-            "Beffroi\\Saml2\\Bindings\\Tests\\": "tests/"
-        },
-        "exclude-from-classmap": [
-            "tests/Fixture/",
-            "tests/Interop/"
-        ]
-    },
-    "config": {
-        "preferred-install": "dist",
-        "sort-packages": true
+    "extra": {
+        "thanks": {
+            "name": "beffroi/framework"
+        }
     }
 }
