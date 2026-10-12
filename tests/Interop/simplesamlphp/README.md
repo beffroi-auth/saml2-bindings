@@ -266,8 +266,8 @@ taken to the login page:
 **`RelayState`**: what each party sends, and how the identity provider decodes it.
 
 - The service provider sends its `ReturnTo` as the `RelayState` of its `AuthnRequest`, escaped by `urlencode()`: 44 and
-  56 bytes for the `ReturnTo` of the run, 105 bytes for a `ReturnTo` of 105 bytes, which `RedirectReceiver` refuses
-  (`InvalidRelayState`, B-9; F-5). An empty or an absent `ReturnTo` is answered with HTTP 400 "Bad request received",
+  56 bytes for the `ReturnTo` of the run, 105 bytes for a `ReturnTo` of 105 bytes, which `RedirectReceiver` refused on
+  1 October 2026 (`InvalidRelayState`, B-9) and reads since 12 October 2026 (F-5). An empty or an absent `ReturnTo` is answered with HTTP 400 "Bad request received",
   no `AuthnRequest`. The `RelayState` of its `LogoutRequest` is an ID of its own state, 43 bytes.
 - The identity provider echoes the `RelayState` it received: 16 and 80 bytes in its forms, 17 bytes in its redirect,
   intact; when none was received, none is sent, neither in its form nor in its query string. SimpleSAMLphp never sent
@@ -294,7 +294,7 @@ those two fields only.
 | `simplesamlphp-2.5.3.1-idp-logoutresponse-to-bindings-unsigned-refused-query-2026-10-01.txt` | 467 | SAMLResponse | none | 13, uppercase; 0 `+`, 0 `%7E` | absent | none | 551 |
 | `simplesamlphp-2.5.3.1-idp-logoutresponse-unsigned-refused-query-2026-10-01.txt` | 522 | SAMLResponse, RelayState | none | 11, uppercase; 0 `+`, 0 `%7E` | 43 | none | 586 |
 | `simplesamlphp-2.5.3.1-sp-authnrequest-query-2026-10-01.txt` | 986 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 39, uppercase; 0 `+`, 0 `%7E` | 56 | 256 | 599 |
-| `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt` | 1 041 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 46, uppercase; 0 `+`, 0 `%7E` | 105 | 256 | not read: B-9 refuses it before inflating (569 by a decoder outside the harness) |
+| `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-query-2026-10-01.txt` | 1 041 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 46, uppercase; 0 `+`, 0 `%7E` | 105 | 256 | not read: B-9 refuses it before inflating (569 by a decoder outside the harness) |
 | `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-query-2026-10-01.txt` | 978 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 45, uppercase; 0 `+`, 0 `%7E` | 44 | 256 | 569 |
 | `simplesamlphp-2.5.3.1-sp-authnrequest-to-model-query-2026-09-30.txt` | 952 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 32, uppercase; 0 `+`, 0 `%7E` | 44 | 256 | 560 |
 | `simplesamlphp-2.5.3.1-sp-logoutrequest-query-2026-10-01.txt` | 1 061 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 35, uppercase; 0 `+`, 0 `%7E` | 43 | 256 | 727 |
@@ -361,12 +361,13 @@ the exchange. What was measured, against sections 4, 6, 7, 8 and 12 of the speci
   (section 12, decided on 1 October 2026); SimpleSAMLphp never sends one, so that the decision stands measured.
 - **F-5. SimpleSAMLphp's service provider sends a `RelayState` longer than 80 bytes.** It sends its `ReturnTo` as the
   `RelayState` of its `AuthnRequest`, whatever its length: a `ReturnTo` of 105 bytes was sent as a `RelayState` of 105
-  bytes, which `RedirectReceiver` refuses (`InvalidRelayState`, B-9), kept as
-  `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt`. SAML Bindings §3.4.3
-  says the value "MUST NOT exceed 80 bytes in length": the producer is wrong and the rule stands (section 9.4). The
-  consequence is real: `beffroi/saml` as an identity provider refuses the login of a SimpleSAMLphp service provider
-  whose application returns to a URL longer than 80 bytes. Whether to read a longer `RelayState` from peers is open,
-  the maintainer's (section 12); nothing changes without a change of the specification first.
+  bytes, which `RedirectReceiver` refused on 1 October 2026 (`InvalidRelayState`, B-9), as SAML Bindings §3.4.3 says
+  the value "MUST NOT exceed 80 bytes in length"; `beffroi/saml` as an identity provider would have refused the login of
+  a SimpleSAMLphp service provider whose application returns to a URL longer than 80 bytes. Decided on 12 October 2026
+  by the maintainer, with K-4 of Keycloak (section 12 of the specification): B-9 reads and sends a `RelayState` of up
+  to 1 024 bytes, a named and bounded exception to the binding (section 8), so that the capture, kept as
+  `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-query-2026-10-01.txt`, is verified and validated
+  (section 9.4).
 - **F-6. The identity provider's `LogoutResponse` is unsigned under its defaults, over HTTP-Redirect too.**
   `saml2-model`'s finding F-1, measured on the query string: under the defaults the identity provider's
   `LogoutResponse` carries `SAMLResponse` and `RelayState` and no `SigAlg` or `Signature`; `RedirectReceiver` reads it,

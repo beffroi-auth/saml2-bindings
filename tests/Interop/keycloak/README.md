@@ -271,8 +271,8 @@ accepted when taken to the login page:
   session's code (43 characters), its tab (11) and its client's internal ID, a UUID written as the base64url of its 16
   bytes (22), joined by dots (`IdentityBrokerState.decoded()` of 26.7.4; its SAML provider declares no long state,
   `supportsLongStateParameter()` false). For a client whose internal ID is not a UUID, Keycloak writes the base64url of
-  its `client_id` instead: 122 bytes for a `client_id` of 49 bytes, which `RedirectReceiver` refuses (`InvalidRelayState`,
-  B-9; K-4). The `RelayState` of its `LogoutRequest` is 24 bytes.
+  its `client_id` instead: 122 bytes for a `client_id` of 49 bytes, which `RedirectReceiver` refused on 1 October 2026
+  (`InvalidRelayState`, B-9) and reads since 12 October 2026 (K-4). The `RelayState` of its `LogoutRequest` is 24 bytes.
 - Realm `idp` echoes the `RelayState` it received: 16, 17 and 80 bytes intact, in its forms and in its query string;
   when none was received, none is sent. Keycloak never sent an empty `RelayState`.
 - A space in a signed `RelayState`, written `%20` by `RedirectSender` and `+` by hand: both verified and decoded to a
@@ -292,7 +292,7 @@ or `SAMLResponse`, `RelayState`, `SigAlg`, `Signature`, nothing else; a space is
 | Query string | Bytes | Parameters | SigAlg | Escapes | RelayState, bytes | Signature, bytes | Inflated, bytes |
 |---|---|---|---|---|---|---|---|
 | `keycloak-26.7.4-idp-logoutresponse-to-bindings-query-2026-10-01.txt` | 993 | SAMLResponse, RelayState, SigAlg, Signature | rsa-sha256 | 32, uppercase; 4 `+`, 0 `%7E` | 80 | 256 | 546 |
-| `keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt` | 1 124 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 33, uppercase; 0 `+`, 0 `%7E` | 122 | 256 | not read: B-9 refuses it before inflating |
+| `keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-query-2026-10-01.txt` | 1 124 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 33, uppercase; 0 `+`, 0 `%7E` | 122 | 256 | not read: B-9 refuses it before inflating |
 | `keycloak-26.7.4-sp-authnrequest-to-bindings-query-2026-10-01.txt` | 1 096 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 39, uppercase; 0 `+`, 0 `%7E` | 78 | 256 | 704 |
 | `keycloak-26.7.4-sp-authnrequest-to-bindings-redirect-binding-refused-query-2026-10-01.txt` | 1 100 | SAMLRequest, RelayState, SigAlg, Signature | rsa-sha256 | 41, uppercase; 0 `+`, 0 `%7E` | 78 | 256 | 708 |
 | `keycloak-26.7.4-sp-authnrequest-unsigned-refused-query-2026-10-01.txt` | 626 | SAMLRequest, RelayState | none | 18, uppercase; 0 `+`, 0 `%7E` | 78 | none | 714 |
@@ -343,11 +343,13 @@ section 1, and no rule of the specification had to change for the exchange. What
 - **K-4. The broker's `RelayState` is 78 bytes, and longer for a client whose ID is not a UUID.** Keycloak keeps the SAML
   broker's state short on purpose, 2 bytes under the bound of SAML Bindings §3.4.3, but writes the base64url of the
   `client_id` where the client's internal ID is not a UUID, which a realm imported with such IDs holds: 122 bytes for a
-  `client_id` of 49 bytes, refused by `RedirectReceiver` (`InvalidRelayState`, B-9), kept as
-  `keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt`. Any `client_id` of 19
-  bytes or more under such an ID goes over 80 bytes. SAML Bindings §3.4.3 says the value "MUST NOT exceed 80 bytes in
-  length": the producer is wrong and the rule stands (section 9.4), with SimpleSAMLphp's long `ReturnTo` (F-5) the
-  second producer named under the open item of section 12.
+  `client_id` of 49 bytes, refused by `RedirectReceiver` on 1 October 2026 (`InvalidRelayState`, B-9), as SAML Bindings
+  §3.4.3 says the value "MUST NOT exceed 80 bytes in length". Any `client_id` of 19 bytes or more under such an ID goes
+  over 80 bytes. Decided on 12 October 2026 by the maintainer, with SimpleSAMLphp's long `ReturnTo` (F-5, section 12 of
+  the specification): B-9 reads and sends a `RelayState` of up to 1 024 bytes, a named and bounded exception to the
+  binding (section 8), so that the capture, kept as
+  `keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-query-2026-10-01.txt`, is verified and validated
+  (section 9.4).
 - **K-5. The broker verifies the query string of a `LogoutResponse`.** Under `validateSignature`, every change after
   signing is refused, and so is the response stripped of `Signature` and `SigAlg`, "Invalid signature in response from
   identity provider.", HTTP 400; the genuine one closes realm `sp`'s session. The broker's logout survives the refused
