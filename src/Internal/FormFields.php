@@ -19,7 +19,7 @@ use function strlen;
  * The fields of a form received over HTTP-POST, read in the order of section 6.2, steps 1 to 3, before anything
  * decodes the message: the three fields the binding reads, each a string, never an array (B-1), no detached signature
  * (section 8), exactly one message field, the one the method takes (B-1), bounded before it is decoded (B-7), and
- * RelayState neither empty nor longer than 80 bytes (B-9). The consumer's parser decoded the form (section 6.8):
+ * RelayState neither empty nor longer than 1 024 bytes (B-9). The consumer's parser decoded the form (section 6.8):
  * nothing here percent-decodes, and the values are kept as they were given. Any other field, a submit button for
  * instance, is skipped.
  *
@@ -38,9 +38,10 @@ final readonly class FormFields
     private const array SIGNATURE_FIELDS = ['SigAlg', 'Signature'];
 
     /**
-     * SAML Bindings §3.5.3 (B-9).
+     * B-9: 1 024 bytes once decoded, a named and bounded exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3
+     * (section 8).
      */
-    private const int MAX_RELAY_STATE_BYTES = 80;
+    private const int MAX_RELAY_STATE_BYTES = 1_024;
 
     /**
      * @param 'SAMLRequest'|'SAMLResponse' $messageParameter the message field the form carries
@@ -67,7 +68,7 @@ final readonly class FormFields
      * @throws Unsupported         when SigAlg or Signature is present (section 8)
      * @throws LimitExceeded       when the message field is longer than maxFormValueBytes (B-7)
      * @throws MalformedEncoding   when the message field is empty (B-8)
-     * @throws InvalidRelayState   when RelayState is empty or longer than 80 bytes (B-9)
+     * @throws InvalidRelayState   when RelayState is empty or longer than 1 024 bytes (B-9)
      */
     public static function read(array $fields, array $messageParameters, int $maxFormValueBytes): self
     {
@@ -151,10 +152,10 @@ final readonly class FormFields
     }
 
     /**
-     * Step 3: RelayState, when present, neither empty nor longer than 80 bytes, kept as given: the consumer's parser
+     * Step 3: RelayState, when present, neither empty nor longer than 1 024 bytes, kept as given: the consumer's parser
      * decoded it.
      *
-     * @throws InvalidRelayState when it is empty or longer than 80 bytes (B-9)
+     * @throws InvalidRelayState when it is empty or longer than 1 024 bytes (B-9)
      */
     private static function relayState(?string $relayState): ?string
     {

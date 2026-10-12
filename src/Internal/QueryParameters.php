@@ -57,9 +57,10 @@ final readonly class QueryParameters
     ];
 
     /**
-     * SAML Bindings §3.4.3 (B-9).
+     * B-9: 1 024 bytes once decoded, a named and bounded exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3
+     * (section 8).
      */
-    private const int MAX_RELAY_STATE_BYTES = 80;
+    private const int MAX_RELAY_STATE_BYTES = 1_024;
 
     /**
      * The base64 of 1 024 bytes, Dsig's maxSignatureValueBytes (section 7).
@@ -95,7 +96,7 @@ final readonly class QueryParameters
      * @throws Unsupported               when SAMLEncoding is not DEFLATE (section 8)
      * @throws UnknownSignatureAlgorithm when SigAlg is not on the closed list (D-5, B-3)
      * @throws LimitExceeded             when the text of Signature is longer than 1 368 characters (section 7)
-     * @throws InvalidRelayState         when RelayState is empty or longer than 80 bytes (B-9)
+     * @throws InvalidRelayState         when RelayState is empty or longer than 1 024 bytes (B-9)
      */
     public static function read(string $queryString, array $messageParameters, Loader $loader): self
     {
@@ -253,10 +254,10 @@ final readonly class QueryParameters
     }
 
     /**
-     * Step 6: RelayState, when present, percent-decoded, neither empty nor longer than 80 bytes, kept as decoded.
+     * Step 6: RelayState, when present, percent-decoded, neither empty nor longer than 1 024 bytes, kept as decoded.
      *
      * @throws MalformedEncoding when it holds a malformed percent-escape (B-8)
-     * @throws InvalidRelayState when it is empty or longer than 80 bytes (B-9)
+     * @throws InvalidRelayState when it is empty or longer than 1 024 bytes (B-9)
      */
     private static function relayState(?string $raw): ?string
     {
