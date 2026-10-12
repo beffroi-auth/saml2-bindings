@@ -26,8 +26,10 @@ every query string received and `PostReceiver` every form.
 The judge was played on 1 October 2026: **green both ways**, on PHP 8.5.10 and on PHP 8.4.25, every probe refused by
 Keycloak, its `LogoutResponse` over HTTP-Redirect obtained, verified and accepted. Two settings of Keycloak's console
 were changed for it, each a measured finding: as its importer configures it, the broker asks for its response over
-HTTP-Redirect, which the model refuses (K-2), and realm `idp` answers a logout over HTTP-POST (K-9). Section 6 holds
-the findings.
+HTTP-Redirect, which the model refuses (K-2), and realm `idp` answers a logout over HTTP-POST (K-9). Played again on 12
+October 2026, after the `dev-main` of both dependencies moved and B-1 and B-9 changed: **green both ways**, on PHP
+8.5.11 and on PHP 8.4.25, the same outcome but for the measure of the broker's `RelayState` of 122 bytes, which the
+package now reads (section 4, "Played again on 12 October 2026"). Section 6 holds the findings.
 
 ## Versions
 
@@ -38,6 +40,8 @@ the findings.
 | This package | `src/` as of d891fbb, on `beffroi-php/saml2-model` `dev-main` at 9c833c5 and `beffroi-php/xml-security` `dev-main` at d7990c0 | the branch `story/9-keycloak` | 1 October 2026 |
 | PHP of the scripts | 8.5.10 and 8.4.25, curl 8.14.1, OpenSSL 3.5.7 | `ghcr.io/spomky-labs/phpqa:8.5` and `:8.4`, `PHP_VERSION` of castor | 1 October 2026 |
 | Docker, Compose, Castor | Docker 29.8.1, Compose 5.5.1, Castor 1.7.0 (macOS, Darwin 25.6, Apple M4) | the machine that ran it | 1 October 2026 |
+| This package, played again | `src/` as of 82bfa1d, on `beffroi-php/saml2-model` `dev-main` at 6028dd7 and `beffroi-php/xml-security` `dev-main` at aece936, documentation only since 9c833c5 and d7990c0 (the name Beffroi) | the branch `story/11-sync` | 12 October 2026 |
+| PHP of the scripts, played again | 8.5.11 and 8.4.25, curl 8.14.1, OpenSSL 3.5.7; Docker 29.8.2, Compose 5.5.1, Castor 1.7.0 | `ghcr.io/spomky-labs/phpqa:8.5` and `:8.4` as pulled on 12 October 2026 | 12 October 2026 |
 
 ## 1. The installation
 
@@ -284,6 +288,29 @@ or `SAMLResponse`, `RelayState`, `SigAlg`, `Signature`, nothing else; a space is
 
 **Forms**: the base64 of every form, the response's and the logout response's, on one line, never wrapped; the fields
 `SAMLResponse`, then `RelayState` when there is one.
+
+### Played again on 12 October 2026
+
+After the `dev-main` of `saml2-model` (6028dd7, its merge of 4b19973) and of `xml-security` (aece936, its merge of
+31dbd57) moved, documentation only, the name Beffroi, and after B-1 came to refuse a name PHP's parser reads as one of
+the six and B-9 to read a `RelayState` of up to 1 024 bytes (section 12 of the specification), the run was played once
+more, from a stopped Keycloak, its realm keys new, without `--keep`, what Keycloak sent written to the ignored
+`received/`:
+
+```bash
+castor keycloak --up
+castor keycloak --capture && castor keycloak --exchange
+PHP_VERSION=8.4 castor keycloak --capture && PHP_VERSION=8.4 castor keycloak --exchange
+castor keycloak --down
+```
+
+On PHP 8.5.11, the capture from 13:17:35 UTC and the exchange from 13:17:40 UTC, and on PHP 8.4.25 from 13:17:50 UTC:
+**every step green on both**, eighteen steps, three of the capture and fifteen of the exchange; the twelve probes
+refused by realm `idp` and by the broker, each genuine twin accepted; the `SigAlg` realm `idp` accepts and refuses
+(K-7), its decoding of a space in a `RelayState`, and the broker's `AuthnRequest` asking for its response over
+HTTP-Redirect, verified and refused by the model (K-2), as on 1 October (RSASSA-PSS not measured on 8.4, whose build
+lacks it). One outcome differs, as the rules now say: the broker's `AuthnRequest` for a client of 49 bytes whose
+internal ID is not a UUID, its `RelayState` of 122 bytes, is read by `RedirectReceiver` where it was refused (K-4).
 
 ## 5. Measurements
 
