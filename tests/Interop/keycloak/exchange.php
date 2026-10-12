@@ -422,8 +422,9 @@ final class Exchange
 
     /**
      * Measure: the RelayState of the broker's AuthnRequest for a client of realm sp whose internal ID is not a UUID,
-     * which Keycloak then writes as the base64url of its client_id (IdentityBrokerState.decoded() of 26.7.4), and what
-     * RedirectReceiver does of it.
+     * which Keycloak then writes as the base64url of its client_id (IdentityBrokerState.decoded() of 26.7.4), over the
+     * 80 bytes of SAML Bindings §3.4.3 and under the 1 024 B-9 reads (finding K-4), and what RedirectReceiver does of
+     * it, the query string kept when it reads it.
      */
     public function measureBrokerRelayState(Admin $admin, string $clientId): void
     {
@@ -443,9 +444,9 @@ final class Exchange
         try {
             new RedirectReceiver(SamlLoader::create())->authnRequest($query);
             $outcome = 'RedirectReceiver read it';
+            $this->keep('sp-authnrequest-to-bindings-long-relaystate-query', $query);
         } catch (Throwable $refused) {
             $outcome = sprintf('RedirectReceiver refused it: %s: %s', $refused::class, $refused->getMessage());
-            $this->keep('sp-authnrequest-to-bindings-long-relaystate-refused-query', $query);
         }
         $this->run->say(sprintf(
             'the broker, for the client %s of %d bytes, its internal ID %s: RelayState %s; %s',

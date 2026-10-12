@@ -25,8 +25,8 @@ use function sprintf;
  * peer's role, the test keys of tests/Fixture/keys/ in the metadata and a clock frozen at the message's IssueInstant:
  * an AuthnRequest signed in XML under every algorithm this build has, and unsigned; a LogoutRequest and a
  * LogoutResponse, always signed (B-12); a response with its assertion signed, with the response signed too, and a
- * failure, signed and unsigned; each without RelayState and with one of exactly 80 bytes, returned as it was given
- * (B-9). The message carries its XML signatures, which the model verifies (B-5, M-2). SAML Bindings §3.5.4.
+ * failure, signed and unsigned; each without RelayState, with one of exactly 80 bytes and with one of 1 024 bytes, the
+ * bound of B-9 (section 8), returned as it was given. The message carries its XML signatures, which the model verifies (B-5, M-2). SAML Bindings §3.5.4.
  */
 final class PostRoundTripTest extends TestCase
 {
@@ -262,5 +262,6 @@ final class PostRoundTripTest extends TestCase
     {
         yield 'without RelayState' => [null];
         yield 'with a RelayState of 80 bytes' => [self::RELAY_STATE];
+        yield 'with a RelayState of 1 024 bytes' => [self::longestRelayState()];
     }
 }

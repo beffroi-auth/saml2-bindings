@@ -42,11 +42,11 @@ validates the capture it comes from.
 | `SigAlg` (`sig-alg-`): case of the fragment, scheme and host, `https`, a trailing slash, whitespace and NUL around it, a second percent-encoding, SHA-256 under the SHA-1 namespace, RSA-SHA224, RSA PKCS#1 v1.5 encryption; the listed URI escaped otherwise, signed as sent | 18 | 15 | 3 |
 | Base64 (`base64-`): padding in the middle of the message and of `Signature`, CR LF in the message, a set unused bit and the URL-safe alphabet in `Signature`; the message unescaped and every character escaped, signed as sent | 7 | 5 | 2 |
 | DEFLATE (`deflate-`): stored blocks, fixed codes, 500 and 5 000 empty stored blocks first, the high bit after the final block set; two final blocks, an empty block after the final one, a preset dictionary through the zlib wrapper (FDICT) and against raw DEFLATE, a reserved block type, a stored length and its complement apart, a flush without a final block, an empty stream | 14 | 8 | 6 |
-| `RelayState` (`relay-state-`): CR LF, NUL, HTML, a URL, invalid and unescaped UTF-8, whitespace at its ends, a second percent-encoding, 80 bytes written in 240 characters or as 80 `+`, 81 `+`, 80 and 81 bytes of characters of several bytes | 16 | 2 | 14 |
-| Forms (`form-`): `[0]`, `[a][b]` and escaped brackets after a field name, names PHP's parser rewrites, `SAMLEncoding`, `Signature[]`, `sigalg`, an empty `SigAlg`, the message field twice, base64 wrapped by CR alone, every three characters and at both ends, a form feed, a vertical tab, a no-break space or a NUL in it, its padding in the middle, encoded twice, its `+` unescaped, a `RelayState` holding CR LF, NUL or HTML, at and over 80 bytes, the message at `maxFormValueBytes`, one over, and over by its line breaks | 33 | 18 | 15 |
+| `RelayState` (`relay-state-`): CR LF, NUL, HTML, a URL, invalid and unescaped UTF-8, whitespace at its ends, a second percent-encoding, 80 bytes written in 240 characters or as 80 `+`, 81 `+`, 80 and 81 bytes of characters of several bytes | 16 | 0 | 16 |
+| Forms (`form-`): `[0]`, `[a][b]` and escaped brackets after a field name, names PHP's parser rewrites, `SAMLEncoding`, `Signature[]`, `sigalg`, an empty `SigAlg`, the message field twice, base64 wrapped by CR alone, every three characters and at both ends, a form feed, a vertical tab, a no-break space or a NUL in it, its padding in the middle, encoded twice, its `+` unescaped, a `RelayState` holding CR LF, NUL or HTML, at and over 80 bytes, the message at `maxFormValueBytes`, one over, and over by its line breaks | 33 | 17 | 16 |
 | Bounds (`bound-`): the query string at the ceiling of `maxQueryStringBytes` and one over, `Signature` of 1 024 bytes in 1 368 characters and written in 4 104, of 256 bytes | 5 | 4 | 1 |
 | Real captures (`real-`): SimpleSAMLphp's and Keycloak's signed `AuthnRequest` and `LogoutResponse`, one character of each part escaped and changed, their parameters reversed, `SAMLEncoding` added; their response forms, one character of the message or of `RelayState` changed | 44 | 30 | 14 |
-| **Written by the builder** | **217** | **127** | **90** |
+| **Written by the builder** | **217** | **124** | **93** |
 
 Thirty-two more attempts are calls, not inputs, each a named case of a data provider of `AdversarialTest`, named as a
 file would be: fields no parser of a form gives (an integer, `null`, `true` or a `Stringable` where a string is read, a
@@ -56,10 +56,14 @@ scope, 1 accepted; Destinations whose query holds names the receiver skips, valu
 Unicode, in punycode or percent-encoded, sent by `RedirectSender` and read back by the receiver, 16 accepted, five whose
 query names `SAMLResponse` in lowercase hexadecimal, `SAMLRequest` twice, or `SAMLRequest` under a NUL, brackets or a
 leading space, refused before the key is called, and one posted by `PostSender` with `SAMLRequest` in the query of its
-action, accepted. In all, 249 attempts, 140 refused and 109 accepted.
+action, accepted. In all, 249 attempts, 137 refused and 112 accepted.
 
 The pass of 1 October 2026 accepted 124 of them. Fifteen have been refused since 12 October 2026, when B-1 came to read
 a name as PHP's own parser of a query string reads it, percent-decoded, its leading spaces dropped, cut at its first NUL
 or `[` (section 12, decided by the maintainer on 1 October 2026): nine names and three CVE-shaped query strings, a NUL,
 brackets or a leading space after or before `SAMLRequest` or `RelayState`, and three Destinations holding such a name.
-Each is named after its new outcome, `-refused`, its file moved here from `../behaviour/`.
+Each is named after its new outcome, `-refused`, its file moved here from `../behaviour/`. Three went the other way the
+same day, when B-9 came to read a `RelayState` of up to 1 024 bytes, a named and bounded exception to the 80 bytes of
+SAML Bindings §3.4.3 and §3.5.3 (section 12, decided by the maintainer on 12 October 2026): the `RelayState` of 81 `+`
+and the two of 81 bytes ending with a character of two bytes, in a query string and in a form, refused by the pass, are
+accepted, named `-accepted` and moved to `../behaviour/`.

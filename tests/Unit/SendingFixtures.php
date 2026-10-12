@@ -35,6 +35,7 @@ use Beffroi\Xml\Dsig\SignatureAlgorithm;
 use DateTimeImmutable;
 use function explode;
 use LogicException;
+use function str_repeat;
 
 /**
  * What the tests of HTTP-Redirect and HTTP-POST sent share (sections 6.3, 6.4, 9.1, 9.2, 9.3): the messages the senders
@@ -63,6 +64,16 @@ trait SendingFixtures
      * characters other than letters and digits, ~, -, . and _.
      */
     public const string RELAY_STATE = '€€€€€€€€€€€€€€€€€€€€ &=+/?#%;~-._state00';
+
+    /**
+     * A RelayState of exactly 1 024 bytes once decoded, the bound of B-9 (section 8), every byte escaped on the wire:
+     * 341 euro signs, three bytes each, then a slash, 3 072 characters percent-encoded, the longest RelayState a query
+     * string of the package carries (section 7).
+     */
+    public static function longestRelayState(): string
+    {
+        return str_repeat('€', 341) . '/';
+    }
 
     /**
      * The ID of the service provider's AuthnRequest, which the identity provider's response answers.

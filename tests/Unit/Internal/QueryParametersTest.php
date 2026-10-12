@@ -218,7 +218,10 @@ final class QueryParametersTest extends TestCase
         yield 'an escape in lowercase hexadecimal' => ['a%2fb', 'a/b'];
         yield 'a ; kept in the value' => ['a;b', 'a;b'];
         yield 'one byte' => ['x', 'x'];
-        yield 'exactly 80 bytes once decoded' => [str_repeat('%41', 80), str_repeat('A', 80)];
+        yield 'exactly 1 024 bytes once decoded, 3 072 characters' => [
+            str_repeat('%41', 1_024),
+            str_repeat('A', 1_024),
+        ];
     }
 
     /**

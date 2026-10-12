@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
-use Beffroi\Saml2\Bindings\Exception\InvalidRelayState;
 use Beffroi\Saml2\Bindings\PostReceiver;
 use Beffroi\Saml2\Bindings\ReceivedLogoutRequest;
 use Beffroi\Saml2\Bindings\ReceivedLogoutResponse;
@@ -85,6 +84,12 @@ final class RealDocumentsTest extends TestCase
 
     private const string OCTOBER_1 = '2026-10-01T11:03:34Z';
 
+    /**
+     * The second at which for-bindings issued its AuthnRequest carrying a ReturnTo of 105 bytes, the measure of the
+     * exchange that followed.
+     */
+    private const string OCTOBER_1_LONG_RETURN_TO = '2026-10-01T11:03:37Z';
+
     private const string KEYCLOAK = 'http://localhost:8190/realms/';
 
     private const string KEYCLOAK_BINDINGS_IDP = 'https://idp.saml2-bindings.test/';
@@ -101,7 +106,10 @@ final class RealDocumentsTest extends TestCase
      * Section 9.4, section 6.1, B-2, B-5, SAML Bindings §3.4.4.1: a signed AuthnRequest of a real service provider, its
      * signature over SAMLRequest, RelayState and SigAlg as they arrived verified under the key of its metadata, accepted
      * by the binding's authentication, its RelayState returned as decoded: SimpleSAMLphp's ReturnTo, Keycloak's broker
-     * state of 78 bytes.
+     * state of 78 bytes; and, beyond the 80 bytes of SAML Bindings §3.4.3, the exception of section 8 (B-9): a ReturnTo
+     * of 105 bytes (finding F-5 of tests/Interop/simplesamlphp/README.md) and the state of 122 bytes the broker writes
+     * for a client whose internal ID is not a UUID (finding K-4 of tests/Interop/keycloak/README.md), both refused on 1
+     * October 2026 and accepted since B-9 reads up to 1 024 bytes (section 12).
      */
     #[Test]
     #[DataProvider('provideAuthnRequests')]
@@ -183,40 +191,25 @@ final class RealDocumentsTest extends TestCase
             self::KEYCLOAK . 'sp/broker/bindings/endpoint',
             '-EyR6_MhiYlEDqynO29Wij-_WW7CjnpUloGSVEFjVnI.kyrCguQFzP4.QtJCtf5lQ8yUPwrjYyuKVw',
         ];
-    }
-
-    /**
-     * Section 9.4, B-9, SAML Bindings §3.4.3: a RelayState over the 80 bytes the binding allows, refused before the
-     * message is decoded. SimpleSAMLphp's service provider sends its ReturnTo as its RelayState whatever its length, 105
-     * bytes here (finding F-5 of tests/Interop/simplesamlphp/README.md); Keycloak's broker writes the base64url of the
-     * client_id into its RelayState when the client's internal ID is not a UUID, 122 bytes here (finding K-4 of
-     * tests/Interop/keycloak/README.md).
-     */
-    #[Test]
-    #[DataProvider('provideAuthnRequestsWhoseRelayStateExceeds80Bytes')]
-    public function itRefusesTheRealAuthnRequestsWhoseRelayStateExceeds80Bytes(string $query): void
-    {
-        // Given
-        $query = self::fixture($query);
-
-        // Then
-        $this->expectException(InvalidRelayState::class);
-        $this->expectExceptionMessageIs('The RelayState is longer than 80 bytes (B-9).');
-
-        // When
-        new RedirectReceiver(SamlLoader::create())->authnRequest($query);
-    }
-
-    /**
-     * @return iterable<string, array{string}>
-     */
-    public static function provideAuthnRequestsWhoseRelayStateExceeds80Bytes(): iterable
-    {
-        yield 'SimpleSAMLphp\'s for-bindings, a ReturnTo of 105 bytes' => [
-            'real/simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt',
+        yield 'for-bindings to this package, a ReturnTo of 105 bytes, 1 October 2026' => [
+            'real/simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-query-2026-10-01.txt',
+            self::OCTOBER_1_LONG_RETURN_TO,
+            'real/simplesamlphp-2.5.3.1-sp-metadata-for-bindings-2026-10-01.xml',
+            self::bindingsIdentityProvider(),
+            self::BINDINGS . 'idp/sso',
+            '_118cf0716e0bd05824bf5b174d045953333cd2504c',
+            'http://localhost:8092/simplesaml/module.php/saml/sp/saml2-acs.php/for-bindings',
+            'http://localhost:8092/simplesaml/session.php?return-to-return-to-return-to-return-to-return-to-return-to-',
         ];
-        yield 'Keycloak\'s broker, a client whose internal ID is not a UUID' => [
-            'real/keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt',
+        yield 'Keycloak\'s broker to this package, a client whose internal ID is not a UUID, 1 October 2026' => [
+            'real/keycloak-26.7.4-sp-authnrequest-to-bindings-long-relaystate-query-2026-10-01.txt',
+            self::KEYCLOAK_OCTOBER_1,
+            'real/keycloak-26.7.4-sp-metadata-for-bindings-2026-10-01.xml',
+            self::keycloakBindingsIdentityProvider(),
+            self::KEYCLOAK_BINDINGS_IDP . 'sso',
+            'ID_f023bf10-c1f3-4217-a0ab-6febc02aac85',
+            self::KEYCLOAK . 'sp/broker/bindings/endpoint',
+            'FxVRi7Piwr1RNqcv7MoiqBwdwZk9AjwuFDkd8HQ5BMg.6aPnW3NLLrQ.YS1jbGllbnQtb2YtcmVhbG0tc3Atd2hvc2UtaW50ZXJuYWwtaWQtaXMtbm8tdXVpZA',
         ];
     }
 

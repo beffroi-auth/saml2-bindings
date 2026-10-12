@@ -44,9 +44,10 @@ use function substr;
 final readonly class RedirectSender
 {
     /**
-     * SAML Bindings §3.4.3 (B-9).
+     * B-9: 1 024 bytes once decoded, a named and bounded exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3
+     * (section 8).
      */
-    private const int MAX_RELAY_STATE_BYTES = 80;
+    private const int MAX_RELAY_STATE_BYTES = 1_024;
 
     /**
      * @param BindingLimits $limits maxInflatedBytes and maxQueryStringBytes, the bounds of the receiver the URL is
@@ -63,7 +64,7 @@ final readonly class RedirectSender
      *
      * @param ?Signing $signing    the service provider's, or null for a request neither party's metadata wants signed
      *                             (section 5.3)
-     * @param ?string  $relayState opaque, at most 80 bytes, never empty (B-9)
+     * @param ?string  $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
      *                                  missing, or holding a fragment or a query the receiver would refuse (section
@@ -95,7 +96,7 @@ final readonly class RedirectSender
     /**
      * The same, a LogoutRequest in SAMLRequest, always signed (B-12, SAML Profiles §4.4.4.1).
      *
-     * @param ?string $relayState opaque, at most 80 bytes, never empty (B-9)
+     * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
      *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 1),
@@ -125,7 +126,7 @@ final readonly class RedirectSender
     /**
      * The same, a LogoutResponse in SAMLResponse, always signed (B-12, SAML Profiles §4.4.4.1).
      *
-     * @param ?string $relayState opaque, at most 80 bytes, never empty (B-9)
+     * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
      *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 1)
@@ -167,7 +168,7 @@ final readonly class RedirectSender
     }
 
     /**
-     * Step 1: a RelayState, when given, neither empty nor longer than 80 bytes (B-9).
+     * Step 1: a RelayState, when given, neither empty nor longer than 1 024 bytes (B-9).
      *
      * @throws InvalidArgumentException a programming error of the caller
      */

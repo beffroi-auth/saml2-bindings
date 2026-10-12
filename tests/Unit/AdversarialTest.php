@@ -6,7 +6,6 @@ namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
 use function base64_encode;
 use Beffroi\Saml2\Bindings\BindingLimits;
-use Beffroi\Saml2\Bindings\Exception\InvalidRelayState;
 use Beffroi\Saml2\Bindings\Exception\LimitExceeded;
 use Beffroi\Saml2\Bindings\Exception\MalformedEncoding;
 use Beffroi\Saml2\Bindings\Exception\MalformedParameters;
@@ -105,8 +104,6 @@ final class AdversarialTest extends TestCase
     private const string ANOTHER_ENCODING = 'A SAMLEncoding other than DEFLATE is refused (section 8).';
 
     private const string NO_KEY_VERIFIES = 'No trusted key verifies the detached signature (D-7, D-8).';
-
-    private const string RELAY_STATE_OVER_80_BYTES = 'The RelayState is longer than 80 bytes (B-9).';
 
     private const string NOT_A_STRING = 'A field of the binding is not a string, an array for instance (B-1).';
 
@@ -564,16 +561,6 @@ final class AdversarialTest extends TestCase
         yield 'deflate empty stream' => ['deflate-empty-stream', MalformedXml::class, 'The input is empty (I-3).'];
 
         // Section 3 row 10, B-9: RelayState.
-        yield 'relay state 81 spaces written plus' => [
-            'relay-state-81-spaces-written-plus',
-            InvalidRelayState::class,
-            self::RELAY_STATE_OVER_80_BYTES,
-        ];
-        yield 'relay state 81 bytes ending with a character of two bytes' => [
-            'relay-state-81-bytes-ending-with-a-character-of-two-bytes',
-            InvalidRelayState::class,
-            self::RELAY_STATE_OVER_80_BYTES,
-        ];
 
         // Section 7, B-7, D-14: the bounds at and one over their value.
         yield 'bound query string one byte over the ceiling' => [
@@ -1002,6 +989,18 @@ final class AdversarialTest extends TestCase
             self::AUTHN_REQUEST_ID,
             str_repeat("\u{20ac}", 26) . 'ab',
         ];
+        yield 'relay state 81 spaces written plus' => [
+            'relay-state-81-spaces-written-plus',
+            Authentication::Binding,
+            self::AUTHN_REQUEST_ID,
+            str_repeat(' ', 81),
+        ];
+        yield 'relay state 81 bytes ending with a character of two bytes' => [
+            'relay-state-81-bytes-ending-with-a-character-of-two-bytes',
+            Authentication::Binding,
+            self::AUTHN_REQUEST_ID,
+            str_repeat('a', 79) . "\u{e9}",
+        ];
 
         // Section 7, B-7, D-14: the bounds at and one over their value.
         yield 'bound query string of exactly the ceiling' => [
@@ -1108,11 +1107,6 @@ final class AdversarialTest extends TestCase
             MalformedEncoding::class,
             self::NOT_BASE64,
         ];
-        yield 'form relay state 81 bytes ending with a character of two bytes' => [
-            'form-relay-state-81-bytes-ending-with-a-character-of-two-bytes',
-            InvalidRelayState::class,
-            self::RELAY_STATE_OVER_80_BYTES,
-        ];
         yield 'form message one byte over max form value bytes' => [
             'form-message-one-byte-over-max-form-value-bytes',
             LimitExceeded::class,
@@ -1175,6 +1169,10 @@ final class AdversarialTest extends TestCase
         yield 'form relay state 80 bytes of characters of three bytes and two letters' => [
             'form-relay-state-80-bytes-of-characters-of-three-bytes-and-two-letters',
             str_repeat("\u{20ac}", 26) . 'ab',
+        ];
+        yield 'form relay state 81 bytes ending with a character of two bytes' => [
+            'form-relay-state-81-bytes-ending-with-a-character-of-two-bytes',
+            str_repeat('a', 79) . "\u{e9}",
         ];
         yield 'form message of exactly max form value bytes' => [
             'form-message-of-exactly-max-form-value-bytes',

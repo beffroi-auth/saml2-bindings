@@ -32,6 +32,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function rawurldecode;
+use function str_repeat;
 use function strlen;
 use function substr_replace;
 use const ZLIB_ENCODING_RAW;
@@ -133,8 +134,8 @@ final class PostReceiverTest extends TestCase
     }
 
     /**
-     * §9.3 row 5, B-9, SAML Bindings §3.5.3: RelayState is returned as the browser posted it, at exactly 80 bytes, and
-     * null when the form has none.
+     * §9.3 row 5, B-9, section 8, SAML Bindings §3.5.3: RelayState is returned as the browser posted it, at the 80
+     * bytes of the binding and at exactly 1 024 bytes, the exception of section 8, and null when the form has none.
      *
      * @param Method $method
      */
@@ -171,6 +172,18 @@ final class PostReceiverTest extends TestCase
             'SAMLResponse',
             self::LOGOUT_RESPONSE,
             self::RELAY_STATE,
+        ];
+        yield 'a response, exactly 1 024 bytes' => [
+            'response',
+            'SAMLResponse',
+            self::RESPONSE,
+            self::relayStateOf1024Bytes(),
+        ];
+        yield 'an AuthnRequest, exactly 1 024 bytes' => [
+            'authnRequest',
+            'SAMLRequest',
+            self::AUTHN_REQUEST,
+            self::relayStateOf1024Bytes(),
         ];
     }
 
@@ -437,7 +450,8 @@ final class PostReceiverTest extends TestCase
     }
 
     /**
-     * §9.2 row 16, B-9, SAML Bindings §3.5.3: a RelayState of 81 bytes, or an empty one, posted in a form is refused.
+     * §9.2 row 16, B-9, section 8, SAML Bindings §3.5.3: a RelayState of 1 025 bytes, one over the exception section 8
+     * makes to the binding, or an empty one, posted in a form is refused.
      */
     #[Test]
     #[DataProvider('provideRelayStatesOutsideTheBounds')]
@@ -456,7 +470,7 @@ final class PostReceiverTest extends TestCase
      */
     public static function provideRelayStatesOutsideTheBounds(): iterable
     {
-        yield '81 bytes' => [self::RELAY_STATE . 'x', 'The RelayState is longer than 80 bytes (B-9).'];
+        yield '1 025 bytes' => [self::relayStateOf1024Bytes() . 'x', 'The RelayState is longer than 1024 bytes (B-9).'];
         yield 'empty' => ['', 'The RelayState is empty (B-9).'];
     }
 
@@ -684,5 +698,14 @@ final class PostReceiverTest extends TestCase
             'authnRequest' => self::postReceiver()->authnRequest($fields),
             'logoutMessage' => self::postReceiver()->logoutMessage($fields),
         };
+    }
+
+    /**
+     * A RelayState of exactly 1 024 bytes, the bound of B-9: RELAY_STATE twelve times, then twenty-one euro signs and a
+     * letter.
+     */
+    private static function relayStateOf1024Bytes(): string
+    {
+        return str_repeat(self::RELAY_STATE, 12) . str_repeat('€', 21) . 'a';
     }
 }

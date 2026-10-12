@@ -597,7 +597,8 @@ final class Exchange
 
     /**
      * Measure: the RelayState of for-bindings's AuthnRequest, its ReturnTo, for a ReturnTo longer than the 80 bytes of
-     * SAML Bindings §3.4.3, and for an empty and an absent one; what RedirectReceiver does of each.
+     * SAML Bindings §3.4.3, which B-9 reads up to 1 024 bytes (finding F-5), and for an empty and an absent one; what
+     * RedirectReceiver does of each, the query string of a RelayState over 80 bytes kept.
      */
     public function measureServiceProviderRelayState(): void
     {
@@ -617,9 +618,11 @@ final class Exchange
             try {
                 $received = new RedirectReceiver(SamlLoader::create())->authnRequest($query);
                 $outcome = sprintf('RedirectReceiver read it, RelayState %s', $received->relayState === null ? 'absent' : strlen($received->relayState) . ' bytes');
+                if (strlen((string) $received->relayState) > 80) {
+                    $this->keep('sp-authnrequest-to-bindings-long-relaystate-query', $query);
+                }
             } catch (Throwable $refused) {
                 $outcome = sprintf('RedirectReceiver refused it: %s: %s', $refused::class, $refused->getMessage());
-                $this->keep('sp-authnrequest-to-bindings-long-relaystate-refused-query', $query);
             }
             $this->run->say(sprintf(
                 'for-bindings, %s: RelayState %s; %s',

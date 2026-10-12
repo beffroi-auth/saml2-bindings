@@ -225,7 +225,7 @@ final class PostSenderTest extends TestCase
     }
 
     /**
-     * §9.2 row 33, B-9, section 6.4 step 1, SAML Bindings §3.5.3: a RelayState of 81 bytes, or an empty one, given to
+     * §9.2 row 33, B-9, section 6.4 step 1, section 8: a RelayState of 1 025 bytes, or an empty one, given to
      * any method, is a programming error of the caller, refused before anything is written or signed: a key management
      * service is never called for a form the sender refuses by its arguments.
      *
@@ -251,14 +251,15 @@ final class PostSenderTest extends TestCase
      */
     public static function provideRelayStatesOutsideTheBounds(): iterable
     {
-        $over = 'The RelayState is longer than 80 bytes (B-9).';
+        $over = 'The RelayState is longer than 1024 bytes (B-9).';
         $empty = 'The RelayState is empty (B-9).';
+        $longer = self::longestRelayState() . 'x';
 
-        yield 'an AuthnRequest, 81 bytes' => ['an AuthnRequest', self::RELAY_STATE . 'x', $over];
-        yield 'a LogoutRequest, 81 bytes' => ['a LogoutRequest', self::RELAY_STATE . 'x', $over];
-        yield 'a LogoutResponse, 81 bytes' => ['a LogoutResponse', self::RELAY_STATE . 'x', $over];
-        yield 'a Response, 81 bytes' => ['a Response', self::RELAY_STATE . 'x', $over];
-        yield 'a failure, 81 bytes' => ['a failure', self::RELAY_STATE . 'x', $over];
+        yield 'an AuthnRequest, 1 025 bytes' => ['an AuthnRequest', $longer, $over];
+        yield 'a LogoutRequest, 1 025 bytes' => ['a LogoutRequest', $longer, $over];
+        yield 'a LogoutResponse, 1 025 bytes' => ['a LogoutResponse', $longer, $over];
+        yield 'a Response, 1 025 bytes' => ['a Response', $longer, $over];
+        yield 'a failure, 1 025 bytes' => ['a failure', $longer, $over];
         yield 'an AuthnRequest, empty' => ['an AuthnRequest', '', $empty];
         yield 'a LogoutRequest, empty' => ['a LogoutRequest', '', $empty];
         yield 'a LogoutResponse, empty' => ['a LogoutResponse', '', $empty];

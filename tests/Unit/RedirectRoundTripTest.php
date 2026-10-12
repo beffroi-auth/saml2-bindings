@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Beffroi\Saml2\Bindings\Tests\Unit;
 
+use Beffroi\Saml2\Bindings\BindingLimits;
 use Beffroi\Saml2\Bindings\ReceivedLogoutRequest;
 use Beffroi\Saml2\Bindings\ReceivedLogoutResponse;
 use Beffroi\Saml2\Model\Validation\Authentication;
@@ -12,14 +13,17 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function sprintf;
+use function strlen;
 
 /**
  * Section 9.1 over HTTP-Redirect: every URL RedirectSender writes, its query string received by RedirectReceiver, then
  * validated by the model's validator of the peer's role, the test keys of tests/Fixture/keys/ in the metadata and a
  * clock frozen at the message's IssueInstant: an AuthnRequest signed under every algorithm this build has, and
- * unsigned; a LogoutRequest and a LogoutResponse, always signed (B-12); each without RelayState and with one of exactly
- * 80 bytes, returned as it was given (B-9). Signed, the message is authenticated by the binding (B-5); unsigned, by
+ * unsigned; a LogoutRequest and a LogoutResponse, always signed (B-12); each without RelayState, with one of exactly
+ * 80 bytes and with one of 1 024 bytes, the bound of B-9 (section 8), every byte escaped, returned as it was given. Signed, the message is authenticated by the binding (B-5); unsigned, by
  * nothing, and accepted only because neither party's metadata asks for a signed request (M-2). SAML Bindings §3.4.4.1.
+ *
+ * @phpstan-import-type Message from SendingFixtures
  */
 final class RedirectRoundTripTest extends TestCase
 {
@@ -157,6 +161,48 @@ final class RedirectRoundTripTest extends TestCase
     {
         yield 'without RelayState' => [null];
         yield 'with a RelayState of 80 bytes' => [self::RELAY_STATE];
+        yield 'with a RelayState of 1 024 bytes, every byte escaped' => [self::longestRelayState()];
+    }
+
+    /**
+     * §9.3 row 5, section 7, B-7, B-9: a RelayState of 1 024 bytes, the bound of B-9, every byte escaped, 3 072
+     * characters on the wire, fits the signed query string of each message under the default maxQueryStringBytes, and
+     * the receiver returns it as it was given.
+     *
+     * @param Message $message
+     */
+    #[Test]
+    #[DataProvider('provideSignedMessages')]
+    public function itCarriesTheLongestRelayStateUnderTheDefaultBound(string $message): void
+    {
+        // Given
+        $url = self::send($message, self::longestRelayState());
+
+        // When
+        $received = match ($message) {
+            'an AuthnRequest' => self::receiver()->authnRequest(self::queryString($url)),
+            default => self::receiver()->logoutMessage(self::queryString($url)),
+        };
+
+        // Then
+        static::assertSame(
+            [3_072, true, self::longestRelayState()],
+            [
+                strlen(self::query($url)->value('RelayState')),
+                strlen(self::queryString($url)) <= new BindingLimits()->maxQueryStringBytes,
+                $received->relayState,
+            ],
+        );
+    }
+
+    /**
+     * @return iterable<string, array{Message}>
+     */
+    public static function provideSignedMessages(): iterable
+    {
+        yield 'an AuthnRequest' => ['an AuthnRequest'];
+        yield 'a LogoutRequest' => ['a LogoutRequest'];
+        yield 'a LogoutResponse' => ['a LogoutResponse'];
     }
 
     /**

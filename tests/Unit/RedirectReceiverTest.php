@@ -166,8 +166,8 @@ final class RedirectReceiverTest extends TestCase
     }
 
     /**
-     * §9.3 row 5, B-9, SAML Bindings §3.4.3: RelayState is returned as decoded, at exactly 80 bytes, and null when the
-     * query string has none.
+     * §9.3 row 5, B-9, section 8, SAML Bindings §3.4.3: RelayState is returned as decoded, at the 80 bytes of the
+     * binding and at exactly 1 024 bytes, the exception of section 8, and null when the query string has none.
      */
     #[Test]
     #[DataProvider('provideRelayStates')]
@@ -189,6 +189,10 @@ final class RedirectReceiverTest extends TestCase
         yield 'exactly 80 bytes' => [
             self::authnRequestQuery()->withRelayState(str_repeat('€', 26) . 'ab'),
             str_repeat('€', 26) . 'ab',
+        ];
+        yield 'exactly 1 024 bytes' => [
+            self::authnRequestQuery()->withRelayState(str_repeat('€', 341) . 'a'),
+            str_repeat('€', 341) . 'a',
         ];
     }
 
@@ -563,18 +567,19 @@ final class RedirectReceiverTest extends TestCase
     }
 
     /**
-     * §9.2 row 16, B-9, SAML Bindings §3.4.3: a RelayState of 81 bytes once decoded is refused.
+     * §9.2 row 16, B-9, section 8, SAML Bindings §3.4.3: a RelayState of 1 025 bytes once decoded, one over the
+     * exception section 8 makes to the binding, is refused.
      */
     #[Test]
-    #[DataProvider('provideRelayStatesOf81Bytes')]
-    public function itRefusesARelayStateOf81Bytes(string $relayState): void
+    #[DataProvider('provideRelayStatesOf1025Bytes')]
+    public function itRefusesARelayStateOf1025Bytes(string $relayState): void
     {
         // Given
         $query = self::authnRequestQuery()->withRelayState($relayState)->signed();
 
         // Then
         $this->expectException(InvalidRelayState::class);
-        $this->expectExceptionMessageIs('The RelayState is longer than 80 bytes (B-9).');
+        $this->expectExceptionMessageIs('The RelayState is longer than 1024 bytes (B-9).');
 
         // When
         self::receiver()->authnRequest($query->toString());
@@ -583,10 +588,10 @@ final class RedirectReceiverTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
-    public static function provideRelayStatesOf81Bytes(): iterable
+    public static function provideRelayStatesOf1025Bytes(): iterable
     {
-        yield '81 characters of one byte' => [str_repeat('a', 81)];
-        yield '27 characters of three bytes' => [str_repeat('€', 27)];
+        yield '1 025 characters of one byte' => [str_repeat('a', 1_025)];
+        yield '341 characters of three bytes and two of one' => [str_repeat('€', 341) . 'ab'];
     }
 
     /**

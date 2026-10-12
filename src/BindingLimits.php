@@ -9,8 +9,8 @@ use function sprintf;
 
 /**
  * The three bounds of section 7 the package chooses (section 5.1): each a quantity in bytes a caller may raise up to its
- * ceiling for a documented reason, never a switch that removes a check (B-7). The lengths the specifications fix, a
- * RelayState of 80 bytes and the text of a Signature, are rules of the value, not bounds, and are not here.
+ * ceiling for a documented reason, never a switch that removes a check (B-7). The lengths the specification fixes, a
+ * RelayState of 1 024 bytes and the text of a Signature, are rules of the value, not bounds, and are not here.
  */
 final readonly class BindingLimits
 {

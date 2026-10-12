@@ -315,13 +315,14 @@ final class FormFieldsTest extends TestCase
     }
 
     /**
-     * §9.3 row 5, B-9, section 6.2 step 3, SAML Bindings §3.5.3: a RelayState of exactly 80 bytes is kept as given.
+     * §9.3 row 5, B-9, section 6.2 step 3, section 8, SAML Bindings §3.5.3: a RelayState of exactly 1 024 bytes, the
+     * exception section 8 makes to the 80 bytes of the binding, is kept as given.
      */
     #[Test]
-    public function itKeepsARelayStateOf80Bytes(): void
+    public function itKeepsARelayStateOf1024Bytes(): void
     {
         // Given
-        $relayState = str_repeat('€', 26) . '%+';
+        $relayState = str_repeat('€', 341) . '%';
 
         // When
         $fields = FormFields::read(
@@ -335,18 +336,19 @@ final class FormFieldsTest extends TestCase
     }
 
     /**
-     * §9.2 row 16, B-9, section 6.2 step 3, SAML Bindings §3.5.3: a RelayState of 81 bytes in a form is refused.
+     * §9.2 row 16, B-9, section 6.2 step 3, section 8, SAML Bindings §3.5.3: a RelayState of 1 025 bytes in a form is
+     * refused.
      */
     #[Test]
-    public function itRefusesARelayStateOver80Bytes(): void
+    public function itRefusesARelayStateOver1024Bytes(): void
     {
         // Then
         $this->expectException(InvalidRelayState::class);
-        $this->expectExceptionMessageIs('The RelayState is longer than 80 bytes (B-9).');
+        $this->expectExceptionMessageIs('The RelayState is longer than 1024 bytes (B-9).');
 
         // When
         FormFields::read(
-            ['SAMLResponse' => 'PHg+', 'RelayState' => str_repeat('€', 26) . '%+x'],
+            ['SAMLResponse' => 'PHg+', 'RelayState' => str_repeat('€', 341) . '%+'],
             ['SAMLResponse'],
             self::BOUND,
         );

@@ -249,21 +249,22 @@ final class RedirectSenderTest extends TestCase
     }
 
     /**
-     * §9.2 row 33, B-9, section 6.3 step 1, SAML Bindings §3.4.3: a RelayState of 81 bytes, given to any method, is a
-     * programming error of the caller, refused before anything is written.
+     * §9.2 row 33, B-9, section 6.3 step 1, section 8: a RelayState of 1 025 bytes, one over the exception section 8
+     * makes to the 80 bytes of SAML Bindings §3.4.3, given to any method, is a programming error of the caller, refused
+     * before anything is written.
      *
      * @param Message $message
      */
     #[Test]
     #[DataProvider('provideEveryMethod')]
-    public function itRefusesARelayStateOver80Bytes(string $message): void
+    public function itRefusesARelayStateOver1024Bytes(string $message): void
     {
         // Then
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessageIs('The RelayState is longer than 80 bytes (B-9).');
+        $this->expectExceptionMessageIs('The RelayState is longer than 1024 bytes (B-9).');
 
         // When
-        self::send($message, self::RELAY_STATE . 'x');
+        self::send($message, self::longestRelayState() . 'x');
     }
 
     /**
@@ -534,13 +535,13 @@ final class RedirectSenderTest extends TestCase
     {
         $limits = new BindingLimits();
 
-        yield 'a RelayState of 81 bytes, an AuthnRequest' => [
+        yield 'a RelayState of 1 025 bytes, an AuthnRequest' => [
             'an AuthnRequest',
-            self::RELAY_STATE . 'x',
+            self::longestRelayState() . 'x',
             null,
             $limits,
             InvalidArgumentException::class,
-            'The RelayState is longer than 80 bytes (B-9).',
+            'The RelayState is longer than 1024 bytes (B-9).',
         ];
         yield 'an empty RelayState, a LogoutRequest' => [
             'a LogoutRequest',

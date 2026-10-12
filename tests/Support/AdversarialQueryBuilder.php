@@ -659,8 +659,9 @@ final readonly class AdversarialQueryBuilder
 
     /**
      * Section 3 row 10, B-9, SAML Bindings §3.4.3: RelayState holding CR LF, NUL, HTML, a URL, bytes that are not UTF-8,
-     * whitespace at its ends, a second percent-encoding, and at and one over its 80 bytes in long spellings, each
-     * signed as sent.
+     * whitespace at its ends, a second percent-encoding, and at and one over the 80 bytes of the binding in long
+     * spellings, refused by the pass of 1 October 2026 over 80 bytes and accepted since B-9 reads up to 1 024 (section
+     * 12), each signed as sent.
      *
      * @return array<string, string>
      */
@@ -682,11 +683,11 @@ final readonly class AdversarialQueryBuilder
                 self::escapedWhole(str_repeat('r', 80)),
             ),
             self::accepted('relay-state-80-spaces-written-plus') => self::signedWithRelayState(str_repeat('+', 80)),
-            self::refused('relay-state-81-spaces-written-plus') => self::signedWithRelayState(str_repeat('+', 81)),
+            self::accepted('relay-state-81-spaces-written-plus') => self::signedWithRelayState(str_repeat('+', 81)),
             self::accepted('relay-state-80-bytes-of-characters-of-three-bytes-and-two-letters') => self::signedWithRelayState(RedirectQuery::encode(
                 str_repeat("\u{20ac}", 26) . 'ab',
             )),
-            self::refused('relay-state-81-bytes-ending-with-a-character-of-two-bytes') => self::signedWithRelayState(RedirectQuery::encode(
+            self::accepted('relay-state-81-bytes-ending-with-a-character-of-two-bytes') => self::signedWithRelayState(RedirectQuery::encode(
                 str_repeat('a', 79) . "\u{e9}",
             )),
         ];
@@ -747,7 +748,7 @@ final readonly class AdversarialQueryBuilder
                 $message . '&RelayState=' . urlencode('<script>alert(1)</script>'),
             self::accepted('form-relay-state-80-bytes-of-characters-of-three-bytes-and-two-letters') =>
                 $message . '&RelayState=' . urlencode(str_repeat("\u{20ac}", 26) . 'ab'),
-            self::refused('form-relay-state-81-bytes-ending-with-a-character-of-two-bytes') =>
+            self::accepted('form-relay-state-81-bytes-ending-with-a-character-of-two-bytes') =>
                 $message . '&RelayState=' . urlencode(str_repeat('a', 79) . "\u{e9}"),
             self::accepted('form-message-of-exactly-max-form-value-bytes') => $message,
             self::refused('form-message-one-byte-over-max-form-value-bytes') => $message,

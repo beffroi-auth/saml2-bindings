@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Section 5.4, B-9: a RelayState empty or over 80 bytes, refused with the rest of what the package refuses.
+ * Section 5.4, B-9: a RelayState empty or over 1 024 bytes, refused with the rest of what the package refuses.
  */
 final class InvalidRelayStateTest extends TestCase
 {
