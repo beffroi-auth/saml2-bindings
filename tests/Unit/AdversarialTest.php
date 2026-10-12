@@ -1638,7 +1638,7 @@ final class AdversarialTest extends TestCase
      * calls its private constructor with the message of one query string and the signature of another, is validated
      * through the binding's authentication: PHP lets code that leaves the scope it was given build what no path of the
      * package builds. The package cannot close it, as it cannot close a call of validateAuthenticatedByBinding() by the
-     * consumer; both are the consumer's word, which section 6.8 bans in heidi/saml. Reflection reaches the same
+     * consumer; both are the consumer's word, which section 6.8 bans in beffroi/saml. Reflection reaches the same
      * (ReflectionProperty::setValue() on a Reception made without its constructor, a lazy ghost), measured outside the
      * suite, whose PHPStan rules ban the Reflection classes in tests/ as in src/ (section 8). Section 12 records the
      * question.

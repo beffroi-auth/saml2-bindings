@@ -329,7 +329,7 @@ section 1, and no rule of the specification had to change for the exchange. What
   carries `ProtocolBinding` HTTP-Redirect: `RedirectReceiver` verified its signature, and the model refused it
   (`Unsupported`, model.md section 8, `saml2-model`'s finding 1, decided there on 30 September 2026). The rule stands:
   the response cannot travel over HTTP-Redirect (Profiles §4.1.2). With "HTTP-POST binding response" switched on by
-  hand, the broker's requests stay on HTTP-Redirect and ask for the response over HTTP-POST. For `heidi/saml`
+  hand, the broker's requests stay on HTTP-Redirect and ask for the response over HTTP-POST. For `beffroi/saml`
   (model.md §6.9, section 6.8 of the specification): its identity provider's metadata lists HTTP-POST next to
   HTTP-Redirect, so that a broker configured by Keycloak's importer posts everything; a Keycloak broker sends this
   package a query string only when its administrator sets that switch, and then signed, since the metadata says

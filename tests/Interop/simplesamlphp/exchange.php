@@ -506,7 +506,7 @@ final class Exchange
             query_described($query),
             strlen((string) $received->relayState),
         ));
-        // What heidi/saml does with it (section 6.8): the session it names is the one this package opened.
+        // What beffroi/saml does with it (section 6.8): the session it names is the one this package opened.
         if (
             $accepted->request->nameId->value !== $assertion->nameId->value
             || $accepted->request->sessionIndexes !== [$assertion->authnStatement->sessionIndex]

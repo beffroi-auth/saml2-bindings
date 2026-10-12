@@ -346,7 +346,7 @@ the exchange. What was measured, against sections 4, 6, 7, 8 and 12 of the speci
   of its `Signature` and `SigAlg` is refused only because the entries facing this package set `validate.logout` and
   `AuthnRequestsSigned="true"` sets `validate.authnrequest`. `saml2-model`'s finding F-9, a logout message whose
   signature fails read as unsigned, is about the XML signature of HTTP-POST; over HTTP-Redirect a failing signature is
-  refused, and only its absence needs `validate.logout`. For `heidi/saml` (section 6.8): a SimpleSAMLphp service
+  refused, and only its absence needs `validate.logout`. For `beffroi/saml` (section 6.8): a SimpleSAMLphp service
   provider without `validate.logout` accepts an unsigned logout message from anyone.
 - **F-3. The `SigAlg` SimpleSAMLphp accepts include RSA-SHA1 and an encryption URI.** It sends RSA-SHA256 by default
   and accepts RSA-SHA256, RSA-SHA384, RSA-SHA512, RSA-SHA1, and `http://www.w3.org/2001/04/xmlenc#rsa-1_5`, the URI of
@@ -364,7 +364,7 @@ the exchange. What was measured, against sections 4, 6, 7, 8 and 12 of the speci
   bytes, which `RedirectReceiver` refuses (`InvalidRelayState`, B-9), kept as
   `simplesamlphp-2.5.3.1-sp-authnrequest-to-bindings-long-relaystate-refused-query-2026-10-01.txt`. SAML Bindings §3.4.3
   says the value "MUST NOT exceed 80 bytes in length": the producer is wrong and the rule stands (section 9.4). The
-  consequence is real: `heidi/saml` as an identity provider refuses the login of a SimpleSAMLphp service provider
+  consequence is real: `beffroi/saml` as an identity provider refuses the login of a SimpleSAMLphp service provider
   whose application returns to a URL longer than 80 bytes. Whether to read a longer `RelayState` from peers is open,
   the maintainer's (section 12); nothing changes without a change of the specification first.
 - **F-6. The identity provider's `LogoutResponse` is unsigned under its defaults, over HTTP-Redirect too.**
