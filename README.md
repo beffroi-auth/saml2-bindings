@@ -1,8 +1,11 @@
-# beffroi-php/saml2-bindings
+# beffroi/saml2-bindings
+
+Part of [beffroi/framework](https://github.com/beffroi-php/beffroi), developed in `src/saml2-bindings` of that monorepo; this repository is
+its read-only split. Issues and pull requests go to the monorepo.
 
 The two browser bindings of SAML 2.0 for PHP, HTTP-Redirect and HTTP-POST, on
-[`beffroi-php/saml2-model`](https://github.com/beffroi-php/saml2-model) and
-[`beffroi-php/xml-security`](https://github.com/beffroi-php/xml-security): a query string or a form decoded into the
+[`beffroi/saml2-model`](https://github.com/beffroi-php/saml2-model) and
+[`beffroi/xml-security`](https://github.com/beffroi-php/xml-security): a query string or a form decoded into the
 document the model reads, the detached signature of HTTP-Redirect verified over the octets the sender signed and
 nothing else, and a message the model writes turned into a URL or a form's fields. It works on strings and arrays,
 never on an HTTP request, and reads no SAML element: which message it expects is the method you call.
@@ -10,16 +13,12 @@ never on an HTTP request, and reads no SAML element: which message it expects is
 [`spec/bindings.md`](spec/bindings.md) is the law of the package: the code conforms to it, or the document changes
 first. This file is its short version.
 
-The package requires PHP 8.4 or later, `ext-zlib`, `beffroi-php/saml2-model` and `beffroi-php/xml-security`, and
-nothing else. Neither dependency has a tag yet: both are required at `dev-main` through a `vcs` repository.
+The package requires PHP 8.4 or later, `ext-zlib`, `beffroi/saml2-model` and `beffroi/xml-security`, and nothing
+else. None of the three has a tag yet: they are required at the maintenance branch.
 
 ```json
 {
-    "repositories": [
-        {"type": "vcs", "url": "https://github.com/beffroi-php/saml2-model.git"},
-        {"type": "vcs", "url": "https://github.com/beffroi-php/xml-security.git"}
-    ],
-    "require": {"beffroi-php/saml2-bindings": "dev-main"},
+    "require": {"beffroi/saml2-bindings": "0.0.x-dev"},
     "minimum-stability": "dev",
     "prefer-stable": true
 }
@@ -141,25 +140,28 @@ DSA-SHA1, which §3.4.4.1 requires, are refused; a `RelayState` of up to 1 024 b
 
 ## Development
 
+From the root of the monorepo, which holds the toolchain of every package:
+
 ```bash
-castor install          # Composer in the phpqa image; the private dependencies read with the GitHub CLI's token
-castor phpunit          # PHPUnit 13 with coverage
-castor prepare-pr       # Mago's fixes, Rector and the formatter, then PHPStan at level max, Deptrac, syntax, composer
-castor phpstan          # and castor deptrac, mago-format, mago-lint, rector, lint, composer-validate, one at a time
-castor infect           # Infection on the files of section 9, no escaped mutant allowed
-castor infect --all     # the whole source; --diff, the lines changed since origin/main
-castor redirect-oracle  # every signed URL the sender writes, verified by OpenSSL, its message inflated by Python
-castor simplesamlphp    # the judge of section 9.5: SimpleSAMLphp as identity provider and service provider, both ways
-castor keycloak         # Keycloak as identity provider and broker, both ways, by hand
+composer install
+castor phpunit -- --testsuite saml2-bindings     # PHPUnit 13 with coverage, this package's suite
+castor prepare-pr                                # Mago lint and format, Rector, PHPStan, Deptrac
+castor phpstan                                   # this package under .ci-tools/phpstan-saml2-bindings.neon: level max, no baseline, the bans of section 8
+castor infect --strict                           # Infection on the files of section 9, no escaped mutant allowed
+castor infect --diff                             # the lines changed since origin/HEAD; without either, the whole source
+castor saml2-bindings-oracle                     # every signed URL the sender writes, verified by OpenSSL, its message inflated by Python
+castor saml2-bindings-simplesamlphp              # the judge of section 9.5: SimpleSAMLphp as identity provider and service provider, both ways
+castor saml2-bindings-keycloak                   # Keycloak as identity provider and broker, both ways, by hand
 ```
 
-Every task runs inside the `ghcr.io/spomky-labs/phpqa` image when Docker is available, on PHP 8.5 by default and on
-8.4 with `PHP_VERSION=8.4`. The CI runs the same tasks on both.
+Every task runs inside the `ghcr.io/spomky-labs/phpqa` image when Docker is available. The CI runs this package's
+suite on PHP 8.5 and on PHP 8.4.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md): private reporting, an advisory and a CVE for every fix.
+See the [security policy](https://github.com/beffroi-php/beffroi/blob/0.0.x/SECURITY.md) of the monorepo: private reporting, an advisory and a CVE for
+every fix.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see the [LICENSE](https://github.com/beffroi-php/beffroi/blob/0.0.x/LICENSE) of the monorepo.
