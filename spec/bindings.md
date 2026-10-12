@@ -202,7 +202,7 @@ final readonly class ReceivedAuthnRequest
 | `ReceivedLogoutResponse` | `response`, an `UnverifiedLogoutResponse` | `validate(LogoutResponseValidator $validator, IdentityProvider\|ServiceProvider $peer, IdentityProvider\|ServiceProvider $self, string $receivedAt, string $requestId): AcceptedLogoutResponse` |
 | `ReceivedResponse` | `response`, an `UnverifiedResponse`; HTTP-POST only (B-12) | `validate(ResponseValidator $validator, IdentityProvider $idp, ExpectedResponse $expected): AcceptedAssertion` |
 
-Each also carries `relayState` and `binding`. Their constructor takes one object of `Internal\`, `Reception`, and is outside the compatibility surface; it refuses a `Reception` that holds another message than its own (`\InvalidArgumentException`, a programming error). A `Reception` comes from one input and from nothing else: its constructor is private, and its one factory per binding takes the raw query string, or the form's fields, with the consumer's `Loader`, the bounds and the service the method serves, and does the whole reading itself, the parameters and the octets, the decoding of the very raw value the octets hold, the inflation, the loading and the reading of the unverified message. The factory of HTTP-Redirect refuses the assertion consumer service, a programming error (`\InvalidArgumentException`): a response never travels over HTTP-Redirect (B-12), so that the one `Reception` that holds a response is read from a form. No path of the package, public or internal, takes a document and a detached signature apart and puts them together. The message a received message validates and the octets of its signature therefore come from one decoding of one input, whoever builds the object (B-5): a consumer that builds one by hand builds it from a query string or a form as the receivers do, and gains nothing. Code that leaves the scope PHP gives it, a closure bound to the scope of `Reception` or Reflection, is outside that guarantee, and banned in `beffroi/saml` (section 6.8).
+Each also carries `relayState` and `binding`. The `validate()` of `ReceivedLogoutRequest` and `ReceivedLogoutResponse` lets through the model's `\InvalidArgumentException` for a `$self` that is not the role facing `$peer`'s, a programming error. Their constructor takes one object of `Internal\`, `Reception`, and is outside the compatibility surface; it refuses a `Reception` that holds another message than its own (`\InvalidArgumentException`, a programming error). A `Reception` comes from one input and from nothing else: its constructor is private, and its one factory per binding takes the raw query string, or the form's fields, with the consumer's `Loader`, the bounds and the service the method serves, and does the whole reading itself, the parameters and the octets, the decoding of the very raw value the octets hold, the inflation, the loading and the reading of the unverified message. The factory of HTTP-Redirect refuses the assertion consumer service, a programming error (`\InvalidArgumentException`): a response never travels over HTTP-Redirect (B-12), so that the one `Reception` that holds a response is read from a form. No path of the package, public or internal, takes a document and a detached signature apart and puts them together. The message a received message validates and the octets of its signature therefore come from one decoding of one input, whoever builds the object (B-5): a consumer that builds one by hand builds it from a query string or a form as the receivers do, and gains nothing. Code that leaves the scope PHP gives it, a closure bound to the scope of `Reception` or Reflection, is outside that guarantee, and banned in `beffroi/saml` (section 6.8).
 
 ### 5.3 Sending
 
@@ -290,7 +290,7 @@ final class Unsupported extends BindingRefused {}           // section 8: refuse
 final class LimitExceeded extends BindingRefused {}         // B-7, the bound named
 ```
 
-A `BindingRefused` is input the package refuses. It extends `Core`'s `RefusedXml`, as the refusals of `Dsig` and the model do, so that a consumer that catches that base class catches everything the stack refuses; the package lets the refusals of `Core`, `Dsig` and the model through as they are, so that `SignatureMismatch` stays `SignatureMismatch` and `SignatureRequired` stays `SignatureRequired`. A `\LogicException` or `\InvalidArgumentException` is a programming error of the caller (a `BindingLimits` over its ceiling, a `RelayState` of 1 025 bytes given to a sender) and is never caught by the stack. Messages follow B-11: they end with the rule in parentheses, `(B-1)` or `(section 8)`.
+A `BindingRefused` is input the package refuses. It extends `Core`'s `RefusedXml`, as the refusals of `Dsig` and the model do, so that a consumer that catches that base class catches everything the stack refuses; the package lets the refusals of `Core`, `Dsig` and the model through as they are, so that `SignatureMismatch` stays `SignatureMismatch` and `SignatureRequired` stays `SignatureRequired`. An `\InvalidArgumentException` is a programming error of the caller (a `BindingLimits` over its ceiling, a `RelayState` of 1 025 bytes given to a sender, a `Reception` of another message given to a `Received*` constructor) and is never caught by the stack. A `\LogicException` is not the caller's: the package throws two, each a failure of the environment, zlib failing to start an inflation (`inflate_init()`, section 6.1 step 8) or a deflation (`gzdeflate()`, section 6.3 step 3), which no argument and no input causes and no test can provoke, the two mutants `infection.json.dist` ignores (section 9.8); neither is a refusal of the input, and neither is caught by the stack. Messages follow B-11: they end with the rule in parentheses, `(B-1)` or `(section 8)`.
 
 ## 6. Processing rules
 
@@ -534,18 +534,31 @@ src/                   RedirectReceiver, PostReceiver, RedirectSender, PostSende
                        DetachedSignature, Reception (one input read whole, 6.1 steps 1 to 11 and 6.2 steps 1 to 6:
                        the message and the detached signature of that very input, section 5.2) and Service (the
                        message each endpoint expects)
-tests/                 Unit/ (one class per public class of src/ and per class of Internal/, plus TraceabilityTest,
-                       SourceGuardTest, Exception/RefusalMessagesTest, AdversarialTest; the round trips of 9.1; the
-                       real query strings and forms of 9.4 in RealDocumentsTest), Support/ (FrozenClock,
-                       InMemoryReplayGuard, the builders of hostile and adversarial query strings), Fixture/ (keys,
-                       copied from saml2-model, with their README; hostile, behaviour, real, each capture recorded in
-                       the README of its harness; oracle, the scripts of the OpenSSL oracle of 9.1, its commands in
-                       its README), Interop/ (9.5: harness.php and measure.php, what both harnesses share;
-                       simplesamlphp/ and keycloak/; the timing of 9.6), PhpStan/ (the rules of model.md §8, copied,
-                       extended with section 8)
+tests/                 bootstrap.php; Unit/: one class per public class of src/, per exception (Exception/, with
+                       RefusalMessagesTest, B-11) and per class of Internal/ (Internal/, with CodecFixtures, the
+                       messages of the codec), the round trips of 9.1 (RedirectRoundTripTest, PostRoundTripTest), the
+                       OpenSSL oracle's input (RedirectSenderOracleTest), the pairing of section 5.2 (PairingTest), the
+                       real query strings and forms of 9.4 (RealDocumentsTest), the pass of 9.8 (AdversarialTest),
+                       SourceGuardTest and TraceabilityTest, the traits ReceptionFixtures and SendingFixtures that hold
+                       the parties, the messages and the keys of the tests, and Support/, the tests of BrowserForm,
+                       DeflateBomb, FrozenClock, InMemoryReplayGuard and RedirectQuery;
+                       Support/: AdversarialQueryBuilder (the attempts of 9.8), BrowserForm (a form as a browser posts
+                       it and PHP's parser reads it), DeflateBomb (a bomb of 1 GiB built without holding it),
+                       FrozenClock, InMemoryReplayGuard, RedirectQuery (query strings signed outside the package),
+                       TestKeys and Traceability (what TraceabilityTest reads); Fixture/: keys (copied from
+                       saml2-model, with their README), hostile (with adversarial-README.md), behaviour, real (with its
+                       README, each capture recorded in the README of its harness), oracle (read-redirect-url.py and
+                       verify-redirect.sh, the OpenSSL oracle of 9.1, its commands in its README); Interop/ (9.5):
+                       harness.php, the browser, the reading of a page and of a query string and the report both
+                       harnesses share, and measure.php, the tables of their READMEs; simplesamlphp/ (installation/,
+                       harness.php, capture.php, exchange.php, timing.php for 9.6, README.md) and keycloak/
+                       (compose.yaml, realms/, harness.php, capture.php, exchange.php, README.md); PhpStan/: the
+                       four rules of model.md §8, copied, extended with section 8 (BannedCallablesRule, BannedCallsRule,
+                       BannedConstructsRule, BannedNamesRule)
 castor.php, .castor/   qa.php: install (Composer in the phpqa image, the two private dependencies read with the GitHub
-                       CLI's token passed by name, never written), phpunit, phpstan, deptrac, mago-format, mago-lint,
-                       rector, lint, composer-validate, infect, prepare-pr, phpqa-update, redirect-oracle (9.1);
+                       CLI's token passed by name, never written), phpunit, phpstan, deptrac, mago-format, mago-lint and
+                       rector with their -fix twins, lint, composer-validate, infect (--files, --diff, --all),
+                       prepare-pr, phpqa-update, redirect-oracle (9.1);
                        simplesamlphp.php and keycloak.php, the harnesses of 9.5
 .ci-tools/             phpstan.neon (level max, strict rules, deprecation rules, phpunit, banned code), deptrac.yaml
                        (Internal below the public classes; Exception beside; the public classes of saml2-model, Core and
