@@ -167,7 +167,8 @@ final readonly class AdversarialQueryBuilder
      * Section 3 rows 1 and 2, B-1: names that are not the six under their literal name, next to the signed query
      * string, each carrying the forged request or another RelayState, and alone, where the message is under them only.
      * PHP's own parser of a query string drops the leading spaces of a name, cuts it at a NUL and reads a "[" as an
-     * array: the names it reads as one of the six while the package does not are among them.
+     * array: the names it reads as one of the six are among them, accepted by the pass of 1 October 2026 and refused
+     * since B-1 reads a name as that parser does (section 12).
      *
      * @return array<string, string>
      */
@@ -194,14 +195,14 @@ final readonly class AdversarialQueryBuilder
                 ->with('Sig%2541lg', $query->value('SigAlg'))
                 ->with('Signature', $query->value('Signature'))
                 ->toString(),
-            self::accepted('name-nul-after-saml-request') => self::nextTo($signed, 'SAMLRequest%00', $forged),
+            self::refused('name-nul-after-saml-request') => self::nextTo($signed, 'SAMLRequest%00', $forged),
             self::refused('name-nul-after-saml-request-alone') => 'SAMLRequest%00=' . $message,
-            self::accepted('name-nul-and-a-letter-after-saml-request') => self::nextTo(
+            self::refused('name-nul-and-a-letter-after-saml-request') => self::nextTo(
                 $signed,
                 'SAMLRequest%00x',
                 $forged,
             ),
-            self::accepted('name-nul-after-relay-state') => self::nextTo($signed, 'RelayState%00', 'forged'),
+            self::refused('name-nul-after-relay-state') => self::nextTo($signed, 'RelayState%00', 'forged'),
             self::accepted('name-nul-inside-saml-request') => self::nextTo($signed, 'SAML%00Request', $forged),
             self::accepted('name-nul-alone') => self::nextTo($signed, '%00', 'x'),
             self::accepted('name-overlong-utf8-e-in-saml-request') => self::nextTo(
@@ -248,29 +249,29 @@ final readonly class AdversarialQueryBuilder
                 'SAMLRequest%20',
                 $forged,
             ),
-            self::accepted('name-space-before-saml-request-written-plus') => self::nextTo(
+            self::refused('name-space-before-saml-request-written-plus') => self::nextTo(
                 $signed,
                 '+SAMLRequest',
                 $forged,
             ),
-            self::accepted('name-space-before-saml-request-written-escaped') => self::nextTo(
+            self::refused('name-space-before-saml-request-written-escaped') => self::nextTo(
                 $signed,
                 '%20SAMLRequest',
                 $forged,
             ),
-            self::accepted('name-space-before-saml-request-written-raw') => self::nextTo(
+            self::refused('name-space-before-saml-request-written-raw') => self::nextTo(
                 $signed,
                 ' SAMLRequest',
                 $forged,
             ),
             self::accepted('name-tab-before-saml-request') => self::nextTo($signed, '%09SAMLRequest', $forged),
-            self::accepted('name-brackets-after-saml-request') => self::nextTo($signed, 'SAMLRequest[]', $forged),
-            self::accepted('name-escaped-brackets-after-saml-request') => self::nextTo(
+            self::refused('name-brackets-after-saml-request') => self::nextTo($signed, 'SAMLRequest[]', $forged),
+            self::refused('name-escaped-brackets-after-saml-request') => self::nextTo(
                 $signed,
                 'SAMLRequest%5B%5D',
                 $forged,
             ),
-            self::accepted('name-index-after-relay-state') => self::nextTo($signed, 'RelayState[0]', 'forged'),
+            self::refused('name-index-after-relay-state') => self::nextTo($signed, 'RelayState[0]', 'forged'),
             self::accepted('name-dot-after-saml-request') => self::nextTo($signed, 'SAMLRequest.', $forged),
             self::accepted('name-escaped-equals-after-saml-request') => self::nextTo(
                 $signed,
@@ -402,11 +403,11 @@ final readonly class AdversarialQueryBuilder
             self::refused('confusion-saml-request-twice-in-two-spellings') => $query
                 ->with('SAMLRequest', RedirectQuery::inLowercase($query->value('SAMLRequest')))
                 ->toString(),
-            self::accepted('confusion-signed-logout-response-and-a-logout-request-under-a-space') =>
+            self::refused('confusion-signed-logout-response-and-a-logout-request-under-a-space') =>
                 $logoutResponse . '&+SAMLRequest=' . $logoutRequest,
-            self::accepted('confusion-signed-logout-response-and-a-logout-request-under-a-nul') =>
+            self::refused('confusion-signed-logout-response-and-a-logout-request-under-a-nul') =>
                 $logoutResponse . '&SAMLRequest%00=' . $logoutRequest,
-            self::accepted('confusion-signed-logout-response-and-a-logout-request-under-brackets') =>
+            self::refused('confusion-signed-logout-response-and-a-logout-request-under-brackets') =>
                 $logoutResponse . '&SAMLRequest[]=' . $logoutRequest,
             self::accepted('confusion-forged-message-under-a-longer-name-first') =>
                 'xSAMLRequest=' . $forged . '&' . $query->toString(),

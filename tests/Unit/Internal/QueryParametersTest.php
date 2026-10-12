@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Beffroi\Saml2\Bindings\Tests\Unit\Internal;
 
+use function array_key_first;
 use function base64_encode;
 use Beffroi\Saml2\Bindings\Internal\DetachedSignature;
 use Beffroi\Saml2\Bindings\Internal\QueryParameters;
@@ -13,6 +14,8 @@ use Beffroi\Xml\Dsig\SignatureAlgorithm;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use function in_array;
+use function parse_str;
 use function str_repeat;
 use function strlen;
 
@@ -99,6 +102,95 @@ final class QueryParametersTest extends TestCase
         yield 'a parameter named in another case' => ['samlrequest=x&SAMLRequest=fZDB'];
         yield 'a percent-encoded name of another parameter' => ['t%65nant=acme&SAMLRequest=fZDB'];
         yield 'a ; inside the value of another parameter' => ['tenant=a;SAMLRequest=x&SAMLRequest=fZDB'];
+        yield 'a name PHP\'s parser reads with a tab before it' => ['%09SAMLRequest=x&SAMLRequest=fZDB'];
+        yield 'a name PHP\'s parser reads with an underscore after it' => [
+            'SAMLRequest+=x&SAMLRequest.=y&SAMLRequest=fZDB',
+        ];
+        yield 'a name a NUL cuts before its end' => ['SAML%00Request=x&SAMLRequest=fZDB'];
+        yield 'a name a NUL begins' => ['%00SAMLRequest=x&SAMLRequest=fZDB'];
+    }
+
+    /**
+     * §9.2 row 6, B-1, section 6.1 step 2: a name is read as PHP's own parser of a query string reads it, the one
+     * behind $_GET, percent-decoded, its leading spaces dropped, cut at its first NUL or "[": the parameter of B-1 it
+     * reads as, or null, is the one that parser reads, so that no name is one of the six for a consumer reading the
+     * query string through it and none for the package.
+     */
+    #[Test]
+    #[DataProvider('provideNames')]
+    public function itReadsANameAsPhpsParserOfAQueryStringReadsIt(string $name): void
+    {
+        // Given
+        $fields = [];
+        parse_str($name . '=v', $fields);
+        $read = array_key_first($fields);
+        $parameters = ['SAMLRequest', 'SAMLResponse', 'RelayState', 'SigAlg', 'Signature', 'SAMLEncoding'];
+
+        // When
+        $parameter = QueryParameters::parameterNamed($name);
+
+        // Then
+        static::assertSame(in_array($read, $parameters, true) ? $read : null, $parameter);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideNames(): iterable
+    {
+        yield 'SAMLRequest as written' => ['SAMLRequest'];
+        yield 'SAMLEncoding as written' => ['SAMLEncoding'];
+        yield 'percent-encoded' => ['SAML%52equest'];
+        yield 'percent-encoded in lowercase hexadecimal' => ['Sig%6eature'];
+        yield 'a space written + before it' => ['+SAMLRequest'];
+        yield 'two spaces before it' => ['+%20RelayState'];
+        yield 'a raw space before it' => [' SigAlg'];
+        yield 'a NUL after it' => ['SAMLResponse%00'];
+        yield 'a NUL and a letter after it' => ['SAMLRequest%00x'];
+        yield 'brackets after it' => ['SAMLRequest[]'];
+        yield 'escaped brackets after it' => ['SAMLRequest%5B%5D'];
+        yield 'an index after it' => ['RelayState[0]'];
+        yield 'two indexes after it' => ['Signature[a][b]'];
+        yield 'brackets and a letter after it' => ['SAMLRequest[]x'];
+        yield 'a space, an escape, a NUL and an index' => ['+Sig%41lg%00[x]'];
+        yield 'a tab before it' => ['%09SAMLRequest'];
+        yield 'a line feed before it' => ['%0ASAMLRequest'];
+        yield 'a space after it' => ['SAMLRequest+'];
+        yield 'a dot after it' => ['SAMLRequest.'];
+        yield 'an escaped = after it' => ['SAMLRequest%3D'];
+        yield 'a closing bracket alone after it' => ['SAMLRequest]'];
+        yield 'a NUL inside it' => ['SAML%00Request'];
+        yield 'a NUL before it' => ['%00SAMLRequest'];
+        yield 'inside brackets' => ['[SAMLRequest]'];
+        yield 'in lowercase' => ['samlrequest'];
+        yield 'percent-encoded twice' => ['SAML%2552equest'];
+        yield 'an empty name' => [''];
+        yield 'another parameter' => ['tenant'];
+    }
+
+    /**
+     * §9.2 row 6, B-1, section 6.1 step 2: a "[" no "]" follows, which PHP's parser reads as "_", cuts the name all the
+     * same, so that a name is one of the six for the package whenever it is for that parser, and a little more often.
+     */
+    #[Test]
+    #[DataProvider('provideNamesWithAnUnclosedBracket')]
+    public function itCutsANameAtAnUnclosedBracketToo(string $name, string $parameter): void
+    {
+        // When
+        $read = QueryParameters::parameterNamed($name);
+
+        // Then
+        static::assertSame($parameter, $read);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function provideNamesWithAnUnclosedBracket(): iterable
+    {
+        yield 'a bracket alone' => ['SAMLRequest[', 'SAMLRequest'];
+        yield 'a bracket and a letter' => ['SigAlg[x', 'SigAlg'];
+        yield 'an escaped bracket' => ['RelayState%5B', 'RelayState'];
     }
 
     /**

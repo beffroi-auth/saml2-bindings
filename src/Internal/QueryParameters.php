@@ -15,8 +15,11 @@ use Beffroi\Xml\Dsig\Exception\UnknownSignatureAlgorithm;
 use Beffroi\Xml\Dsig\SignatureAlgorithm;
 use function explode;
 use function in_array;
+use function ltrim;
 use function sprintf;
+use function strcspn;
 use function strlen;
+use function substr;
 
 /**
  * The parameters of a query string received over HTTP-Redirect, read in the order of section 6.1, steps 2 to 7, before
@@ -26,8 +29,11 @@ use function strlen;
  * decoded (B-7, B-8), RelayState decoded and bounded (B-9), and the octets the signature covers (B-2).
  *
  * Every value is kept as the substring of the query string exactly as it arrived; the message is the one raw value the
- * signed octets hold, never another occurrence (B-1, B-2). Any other parameter, the query of a Location among them, is
- * skipped once its name is decoded, its value decoded no further and never signed (SAML Bindings §3.4.4.1).
+ * signed octets hold, never another occurrence (B-1, B-2). A name is read as PHP's own parser of a query string reads
+ * it, percent-decoded, its leading spaces dropped, cut at its first NUL or "[": one that reads so as one of the six
+ * while it is not written so is refused, so that a consumer reading the query string through that parser too never
+ * sees a parameter the package did not read (B-1). Any other parameter, the query of a Location among them, is skipped
+ * once its name is decoded, its value decoded no further and never signed (SAML Bindings §3.4.4.1).
  *
  * @internal outside the compatibility promise of section 5
  */
@@ -105,26 +111,47 @@ final readonly class QueryParameters
     }
 
     /**
+     * Section 6.1 step 2: the parameter of B-1 a name of a query string reads as, as PHP's own parser of a query string
+     * reads it (php_register_variable_ex()): percent-decoded under B-8, its leading spaces dropped, cut at its first
+     * NUL or "[". Null when it reads as none of the six. The sender reads the query of a Destination with it, as the
+     * receiver will (section 6.3 step 1).
+     *
+     * @param string $name a name as it arrived, still percent-encoded
+     *
+     * @return ?string one of the six parameters of B-1, or null
+     *
+     * @throws MalformedEncoding when the name holds a malformed percent-escape (B-8)
+     */
+    public static function parameterNamed(string $name): ?string
+    {
+        $read = ltrim(Percent::decode($name), ' ');
+        $read = substr($read, 0, strcspn($read, "\0["));
+
+        return in_array($read, self::PARAMETERS, true) ? $read : null;
+    }
+
+    /**
      * Step 2: the raw value of each of the six parameters of B-1 the query string carries. Split on & alone, a ; being
-     * a character of a value; each segment split on its first =; its name percent-decoded under B-8. An empty segment
-     * has an empty name, which is none of the six, and is skipped as any other parameter is.
+     * a character of a value; each segment split on its first =; its name read as parameterNamed() reads it. An empty
+     * segment has an empty name, which is none of the six, and is skipped as any other parameter is.
      *
      * @return array<string, string>
      *
      * @throws MalformedEncoding   when a name holds a malformed percent-escape (B-8)
-     * @throws MalformedParameters when one of the six is named with a percent-escape, has no =, or appears twice (B-1)
+     * @throws MalformedParameters when one of the six is named otherwise than as written, has no =, or appears twice
+     *                             (B-1)
      */
     private static function parameters(string $queryString): array
     {
         $parameters = [];
         foreach (explode('&', $queryString) as $segment) {
             $pair = explode('=', $segment, 2);
-            $name = Percent::decode($pair[0]);
-            if (! in_array($name, self::PARAMETERS, true)) {
+            $name = self::parameterNamed($pair[0]);
+            if ($name === null) {
                 continue;
             }
             if ($name !== $pair[0]) {
-                throw new MalformedParameters('A parameter of the binding is named with a percent-escape (B-1).');
+                throw new MalformedParameters('A name reads as a parameter of the binding once percent-decoded, its leading spaces dropped or cut at a NUL or a "[" (B-1).');
             }
             $value = $pair[1] ?? null;
             if ($value === null) {

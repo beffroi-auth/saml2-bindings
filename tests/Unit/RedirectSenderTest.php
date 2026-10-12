@@ -314,8 +314,9 @@ final class RedirectSenderTest extends TestCase
 
     /**
      * §9.2 row 33, B-1, section 6.3 step 1: a Destination whose own query holds one of the six parameters of the
-     * binding, under its name or a percent-encoded spelling of it, first or not, with or without "=", which the
-     * receiver would refuse, is a programming error of the caller.
+     * binding, under its name or a name PHP's parser reads as it, percent-encoded, after a leading space, followed by a
+     * NUL or a "[", first or not, with or without "=", which the receiver would refuse, is a programming error of the
+     * caller.
      */
     #[Test]
     #[DataProvider('provideQueriesHoldingAParameterOfTheBinding')]
@@ -342,6 +343,11 @@ final class RedirectSenderTest extends TestCase
         yield 'SAMLEncoding' => [self::SSO . '?SAMLEncoding=x'];
         yield 'SAMLRequest, percent-encoded' => [self::SSO . '?SAML%52equest=x'];
         yield 'RelayState, two of its letters percent-encoded' => [self::SSO . '?tenant=acme&Relay%53tat%65=x'];
+        yield 'SAMLRequest after a space written +' => [self::SSO . '?+SAMLRequest=x'];
+        yield 'SigAlg after a space written %20' => [self::SSO . '?tenant=acme&%20SigAlg=x'];
+        yield 'SAMLResponse followed by a NUL' => [self::SSO . '?SAMLResponse%00=x'];
+        yield 'RelayState followed by an index' => [self::SSO . '?RelayState[0]=x'];
+        yield 'Signature followed by escaped brackets' => [self::SSO . '?Signature%5B%5D=x'];
     }
 
     /**

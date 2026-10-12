@@ -66,21 +66,17 @@ use function unserialize;
  * and, where the attempt is a call and not an input, a named case of a data provider, named after its outcome as a
  * fixture would be. An attempt accepted is the consumer's one path, received then validated: over a signed query
  * string, Authentication::Binding and the ID of the message the signature covers, never the forged one slipped next
- * to it. None bypassed a rule of section 4. Two classes of attempt are accepted by the rules as they stand and are
- * open questions of section 12: names PHP's own parser of a query string reads as one of the six of B-1 while the
- * package does not, and a received message assembled by code that leaves the scope PHP gives it (Closure::bind).
- * SAML Bindings §3.4.4.1, §3.5.4.
+ * to it. None bypassed a rule of section 4. Two classes of attempt were accepted by the rules as they stood, each
+ * decided by the maintainer on 1 October 2026 (section 12): names PHP's own parser of a query string reads as one of
+ * the six of B-1 while the package did not, refused by B-1 since, their attempts named after their new outcome; and a
+ * received message assembled by code that leaves the scope PHP gives it (Closure::bind), still accepted here and
+ * banned in beffroi/saml (section 6.8). SAML Bindings §3.4.4.1, §3.5.4.
  *
  * @phpstan-type Message 'an AuthnRequest'|'a LogoutRequest'|'a LogoutResponse'
  */
 final class AdversarialTest extends TestCase
 {
     use SendingFixtures;
-
-    /**
-     * The ID of the LogoutResponse of ReceptionFixtures.
-     */
-    private const string LOGOUT_RESPONSE_ID = '_6e2b1f8d0c4a5b3f9e7d2c1b0a9f8e7d6c5b4a3f';
 
     /**
      * The base64 of the response of ReceptionFixtures on one line, in bytes, the bound of the form attempts at
@@ -93,6 +89,8 @@ final class AdversarialTest extends TestCase
     private const string HALF_A_SIGNATURE = 'SigAlg and Signature are both present or both absent (B-3).';
 
     private const string TWICE = 'A parameter of the binding appears more than once (B-1).';
+
+    private const string READ_AS_A_PARAMETER = 'A name reads as a parameter of the binding once percent-decoded, its leading spaces dropped or cut at a NUL or a "[" (B-1).';
 
     private const string NOT_BASE64 = 'A base64 value is not in its one form: the alphabet and the padding of RFC 4648 section 4, the unused bits zero, no whitespace (B-8).';
 
@@ -221,7 +219,7 @@ final class AdversarialTest extends TestCase
         yield 'name nul after saml request alone' => [
             'name-nul-after-saml-request-alone',
             MalformedParameters::class,
-            self::NEITHER,
+            self::READ_AS_A_PARAMETER,
         ];
         yield 'name lower case saml request alone' => [
             'name-lower-case-saml-request-alone',
@@ -243,6 +241,51 @@ final class AdversarialTest extends TestCase
             'name-escaped-equals-and-the-message-in-the-name-alone',
             MalformedParameters::class,
             self::NEITHER,
+        ];
+        yield 'name nul after saml request' => [
+            'name-nul-after-saml-request',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name nul and a letter after saml request' => [
+            'name-nul-and-a-letter-after-saml-request',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name nul after relay state' => [
+            'name-nul-after-relay-state',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name space before saml request written plus' => [
+            'name-space-before-saml-request-written-plus',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name space before saml request written escaped' => [
+            'name-space-before-saml-request-written-escaped',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name space before saml request written raw' => [
+            'name-space-before-saml-request-written-raw',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name brackets after saml request' => [
+            'name-brackets-after-saml-request',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name escaped brackets after saml request' => [
+            'name-escaped-brackets-after-saml-request',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+        ];
+        yield 'name index after relay state' => [
+            'name-index-after-relay-state',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
         ];
 
         // Section 3 rows 1 to 3, B-1, B-2: separators, and characters of a URL in values.
@@ -336,6 +379,24 @@ final class AdversarialTest extends TestCase
         ];
 
         // Section 3 rows 1 and 3, B-1, B-2, B-5: signature confusion beyond CVE-2025-27773.
+        yield 'confusion signed logout response and a logout request under a space' => [
+            'confusion-signed-logout-response-and-a-logout-request-under-a-space',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+            'a LogoutResponse',
+        ];
+        yield 'confusion signed logout response and a logout request under a nul' => [
+            'confusion-signed-logout-response-and-a-logout-request-under-a-nul',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+            'a LogoutResponse',
+        ];
+        yield 'confusion signed logout response and a logout request under brackets' => [
+            'confusion-signed-logout-response-and-a-logout-request-under-brackets',
+            MalformedParameters::class,
+            self::READ_AS_A_PARAMETER,
+            'a LogoutResponse',
+        ];
         yield 'confusion saml request twice in two spellings' => [
             'confusion-saml-request-twice-in-two-spellings',
             MalformedParameters::class,
@@ -579,24 +640,6 @@ final class AdversarialTest extends TestCase
             self::AUTHN_REQUEST_ID,
             'state',
         ];
-        yield 'name nul after saml request' => [
-            'name-nul-after-saml-request',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name nul and a letter after saml request' => [
-            'name-nul-and-a-letter-after-saml-request',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name nul after relay state' => [
-            'name-nul-after-relay-state',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
         yield 'name nul inside saml request' => [
             'name-nul-inside-saml-request',
             Authentication::Binding,
@@ -670,44 +713,8 @@ final class AdversarialTest extends TestCase
             self::AUTHN_REQUEST_ID,
             'state',
         ];
-        yield 'name space before saml request written plus' => [
-            'name-space-before-saml-request-written-plus',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name space before saml request written escaped' => [
-            'name-space-before-saml-request-written-escaped',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name space before saml request written raw' => [
-            'name-space-before-saml-request-written-raw',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
         yield 'name tab before saml request' => [
             'name-tab-before-saml-request',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name brackets after saml request' => [
-            'name-brackets-after-saml-request',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name escaped brackets after saml request' => [
-            'name-escaped-brackets-after-saml-request',
-            Authentication::Binding,
-            self::AUTHN_REQUEST_ID,
-            'state',
-        ];
-        yield 'name index after relay state' => [
-            'name-index-after-relay-state',
             Authentication::Binding,
             self::AUTHN_REQUEST_ID,
             'state',
@@ -784,27 +791,6 @@ final class AdversarialTest extends TestCase
         ];
 
         // Section 3 rows 1 and 3, B-1, B-2, B-5: signature confusion beyond CVE-2025-27773.
-        yield 'confusion signed logout response and a logout request under a space' => [
-            'confusion-signed-logout-response-and-a-logout-request-under-a-space',
-            Authentication::Binding,
-            self::LOGOUT_RESPONSE_ID,
-            'state',
-            'a LogoutResponse',
-        ];
-        yield 'confusion signed logout response and a logout request under a nul' => [
-            'confusion-signed-logout-response-and-a-logout-request-under-a-nul',
-            Authentication::Binding,
-            self::LOGOUT_RESPONSE_ID,
-            'state',
-            'a LogoutResponse',
-        ];
-        yield 'confusion signed logout response and a logout request under brackets' => [
-            'confusion-signed-logout-response-and-a-logout-request-under-brackets',
-            Authentication::Binding,
-            self::LOGOUT_RESPONSE_ID,
-            'state',
-            'a LogoutResponse',
-        ];
         yield 'confusion forged message under a longer name first' => [
             'confusion-forged-message-under-a-longer-name-first',
             Authentication::Binding,
@@ -1794,18 +1780,6 @@ final class AdversarialTest extends TestCase
             self::SSO . '?SAML%2552equest=x',
             '&',
         ];
-        yield 'adversarial-sender-destination-query-nul-after-saml-request-accepted' => [
-            self::SSO . '?SAMLRequest%00=x',
-            '&',
-        ];
-        yield 'adversarial-sender-destination-query-space-before-saml-request-accepted' => [
-            self::SSO . '?+SAMLRequest=x',
-            '&',
-        ];
-        yield 'adversarial-sender-destination-query-brackets-after-saml-request-accepted' => [
-            self::SSO . '?SAMLRequest%5B%5D=x',
-            '&',
-        ];
         yield 'adversarial-sender-destination-query-lower-case-saml-request-accepted' => [
             self::SSO . '?samlrequest=x',
             '&',
@@ -1864,7 +1838,8 @@ final class AdversarialTest extends TestCase
 
     /**
      * Section 9.8, B-1, section 6.3 step 1: a Destination whose own query names a parameter of the binding in a
-     * spelling the corpus does not list, a lowercase percent-escape, is refused before the key is called.
+     * spelling the corpus does not list, a lowercase percent-escape, or twice, or under a name PHP's parser reads as
+     * one of the six, a NUL or brackets after it or a space before it, is refused before the key is called.
      */
     #[Test]
     #[DataProvider('provideDestinationsRefused')]
@@ -1888,6 +1863,15 @@ final class AdversarialTest extends TestCase
         ];
         yield 'adversarial-sender-destination-query-saml-request-twice-refused' => [
             self::SSO . '?SAMLRequest=a&SAMLRequest=b',
+        ];
+        yield 'adversarial-sender-destination-query-nul-after-saml-request-refused' => [
+            self::SSO . '?SAMLRequest%00=x',
+        ];
+        yield 'adversarial-sender-destination-query-space-before-saml-request-refused' => [
+            self::SSO . '?+SAMLRequest=x',
+        ];
+        yield 'adversarial-sender-destination-query-brackets-after-saml-request-refused' => [
+            self::SSO . '?SAMLRequest%5B%5D=x',
         ];
     }
 

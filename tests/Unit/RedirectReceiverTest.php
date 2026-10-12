@@ -376,16 +376,17 @@ final class RedirectReceiverTest extends TestCase
     }
 
     /**
-     * §9.2 row 6, B-1, SAML Bindings §3.4.4.1: a parameter of B-1 under a percent-encoded name, which PHP's parser
-     * would decode to the name, is refused, alone and next to the literal one.
+     * §9.2 row 6, B-1, section 6.1 step 2, SAML Bindings §3.4.4.1: a parameter of B-1 under a name PHP's parser of a
+     * query string reads as it while it is not written so, percent-encoded, after a leading space, followed by a NUL
+     * or a "[", is refused, alone and next to the literal one.
      */
     #[Test]
-    #[DataProvider('providePercentEncodedNames')]
-    public function itRefusesAPercentEncodedName(string $queryString): void
+    #[DataProvider('provideNamesReadAsAParameterOfTheBinding')]
+    public function itRefusesANameReadAsAParameterOfTheBinding(string $queryString): void
     {
         // Then
         $this->expectException(MalformedParameters::class);
-        $this->expectExceptionMessageIs('A parameter of the binding is named with a percent-escape (B-1).');
+        $this->expectExceptionMessageIs('A name reads as a parameter of the binding once percent-decoded, its leading spaces dropped or cut at a NUL or a "[" (B-1).');
 
         // When
         self::receiver()->authnRequest($queryString);
@@ -394,7 +395,7 @@ final class RedirectReceiverTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
-    public static function providePercentEncodedNames(): iterable
+    public static function provideNamesReadAsAParameterOfTheBinding(): iterable
     {
         $query = self::authnRequestQuery()->withRelayState('state')->signed();
         $message = $query->value('SAMLRequest');
@@ -408,6 +409,24 @@ final class RedirectReceiverTest extends TestCase
         yield 'Relay%53tate next to RelayState' => [$query->toString() . '&Relay%53tate=other'];
         yield 'in lowercase hexadecimal, Sig%6eature' => [$query->toString() . '&Sig%6eature=x'];
         yield 'the whole name escaped, without =' => [$query->toString() . '&%53%41%4D%4C%45%6E%63%6F%64%69%6E%67'];
+        yield 'a space written + before SAMLRequest, alone' => ['+SAMLRequest=' . $message];
+        yield 'a space written + before SAMLRequest, next to it' => [$query->toString() . '&+SAMLRequest=' . $message];
+        yield 'a space written %20 before SigAlg, next to it' => [$query->toString() . '&%20SigAlg=x'];
+        yield 'two raw spaces before RelayState, alone' => [
+            $query->without('RelayState')->toString() . '&  RelayState=x',
+        ];
+        yield 'a NUL after SAMLRequest, alone' => ['SAMLRequest%00=' . $message];
+        yield 'a NUL and a letter after SAMLResponse, next to SAMLRequest' => [
+            $query->toString() . '&SAMLResponse%00x=y',
+        ];
+        yield 'a NUL after Signature, before it' => ['Signature%00=x&' . $query->toString()];
+        yield 'brackets after SAMLRequest, alone' => ['SAMLRequest[]=' . $message];
+        yield 'escaped brackets after SAMLRequest, next to it' => [
+            $query->toString() . '&SAMLRequest%5B%5D=' . $message,
+        ];
+        yield 'an index after RelayState, next to it' => [$query->toString() . '&RelayState[0]=other'];
+        yield 'an unclosed bracket after SAMLEncoding' => [$query->toString() . '&SAMLEncoding[=x'];
+        yield 'a leading space, an escape, a NUL and an index together' => [$query->toString() . '&+Sig%41lg%00[x]=y'];
     }
 
     /**
