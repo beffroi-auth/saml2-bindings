@@ -8,6 +8,7 @@ use Beffroi\Saml2\Bindings\Exception\LimitExceeded;
 use Beffroi\Saml2\Bindings\Exception\MalformedEncoding;
 use Beffroi\Saml2\Bindings\Internal\Base64;
 use Beffroi\Saml2\Bindings\Internal\Deflater;
+use Beffroi\Saml2\Bindings\Internal\DestinationScheme;
 use Beffroi\Saml2\Bindings\Internal\Percent;
 use Beffroi\Saml2\Bindings\Internal\QueryParameters;
 use Beffroi\Saml2\Bindings\Internal\SignedOctets;
@@ -67,8 +68,9 @@ final readonly class RedirectSender
      * @param ?string  $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing, or holding a fragment or a query the receiver would refuse (section
-     *                                  6.3 step 1), what the writer refuses so
+     *                                  missing, whose scheme is neither http nor https, or holding a fragment or a
+     *                                  query the receiver would refuse (section 6.3 step 1), what the writer refuses
+     *                                  so
      * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
      *                                  than maxQueryStringBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
@@ -98,9 +100,9 @@ final readonly class RedirectSender
      *
      * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
-     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 1),
-     *                                  what the writer refuses so
+     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination whose
+     *                                  scheme is neither http nor https, or that holds a fragment or a query the
+     *                                  receiver would refuse (section 6.3 step 1), what the writer refuses so
      * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
      *                                  than maxQueryStringBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
@@ -128,8 +130,9 @@ final readonly class RedirectSender
      *
      * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination that
-     *                                  holds a fragment or a query the receiver would refuse (section 6.3 step 1)
+     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination whose
+     *                                  scheme is neither http nor https, or that holds a fragment or a query the
+     *                                  receiver would refuse (section 6.3 step 1)
      * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
      *                                  than maxQueryStringBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
@@ -264,15 +267,19 @@ final readonly class RedirectSender
     }
 
     /**
-     * Step 1: the query the Destination already holds, without its "?", or null when it holds none. Its names are read
-     * as the receiver reads them (section 6.1 step 2): a name that reads as one of the six parameters of B-1, written
-     * so or once percent-decoded, its leading spaces dropped or cut at a NUL or a "[", or a malformed percent-escape,
-     * would be refused there, and is refused here.
+     * Step 1: the Destination, an http or an https URL, and the query it already holds, without its "?", or null when
+     * it holds none. Its names are read as the receiver reads them (section 6.1 step 2): a name that reads as one of
+     * the six parameters of B-1, written so or once percent-decoded, its leading spaces dropped or cut at a NUL or a
+     * "[", or a malformed percent-escape, would be refused there, and is refused here.
      *
-     * @throws InvalidArgumentException when the Destination holds a fragment, or a query the receiver would refuse
+     * @throws InvalidArgumentException when the Destination is neither an http nor an https URL, holds a fragment, or
+     *                                  holds a query the receiver would refuse
      */
     private function ownQuery(string $destination): ?string
     {
+        if (! DestinationScheme::isWeb($destination)) {
+            throw new InvalidArgumentException('The Destination is neither an http nor an https URL, the only locations a browser is sent to (section 6.3).');
+        }
         if (str_contains($destination, '#')) {
             throw new InvalidArgumentException('The Destination holds a fragment, which a URL of HTTP-Redirect does not carry (section 6.3).');
         }

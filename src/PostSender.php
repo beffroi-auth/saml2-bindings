@@ -6,6 +6,7 @@ namespace Beffroi\Saml2\Bindings;
 
 use Beffroi\Saml2\Bindings\Exception\LimitExceeded;
 use Beffroi\Saml2\Bindings\Internal\Base64;
+use Beffroi\Saml2\Bindings\Internal\DestinationScheme;
 use Beffroi\Saml2\Model\Protocol\AuthnRequest;
 use Beffroi\Saml2\Model\Protocol\LogoutRequest;
 use Beffroi\Saml2\Model\Protocol\LogoutResponse;
@@ -59,7 +60,8 @@ final readonly class PostSender
      * @param ?string     $relayState opaque, at most 1 024 bytes, never empty, the one the request carried (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing (section 6.4 step 1), what the writer refuses so
+     *                                  missing or whose scheme is neither http nor https (section 6.4 step 1), what
+     *                                  the writer refuses so
      * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
@@ -87,7 +89,8 @@ final readonly class PostSender
      * @param ?string $relayState opaque, at most 1 024 bytes, never empty, the one the request carried (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing (section 6.4 step 1), what the writer refuses so
+     *                                  missing or whose scheme is neither http nor https (section 6.4 step 1), what
+     *                                  the writer refuses so
      * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
@@ -115,7 +118,7 @@ final readonly class PostSender
      * @param ?string  $relayState opaque, at most 1 024 bytes, never empty (B-9)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing (section 6.4 step 1)
+     *                                  missing or whose scheme is neither http nor https (section 6.4 step 1)
      * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
      * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
@@ -188,7 +191,7 @@ final readonly class PostSender
 
     /**
      * Step 1, what needs nothing but the arguments, before anything is written or signed: the Destination, the form's
-     * action, then the RelayState, when given, neither empty nor longer than 1 024 bytes (B-9).
+     * action, an http or an https URL, then the RelayState, when given, neither empty nor longer than 1 024 bytes (B-9).
      *
      * @param ?string $destination the message's Destination
      * @param string  $message     the name of the message, for the refusal
@@ -204,6 +207,9 @@ final readonly class PostSender
                 'The %s holds no Destination, the action of the form (section 6.4).',
                 $message,
             ));
+        }
+        if (! DestinationScheme::isWeb($destination)) {
+            throw new InvalidArgumentException('The Destination is neither an http nor an https URL, the only actions a form is submitted to (section 6.4).');
         }
         if ($relayState === '') {
             throw new InvalidArgumentException('The RelayState is empty (B-9).');
