@@ -210,7 +210,7 @@ Each also carries `relayState` and `binding`. The `validate()` of `ReceivedLogou
 namespace Beffroi\Saml2\Bindings;
 
 use Beffroi\Saml2\Model\Protocol\{AuthnRequest, LogoutRequest, LogoutResponse, Response};
-use Beffroi\Saml2\Model\Writing\{SignedParts, Signing};
+use Beffroi\Saml2\Model\Writing\{Encryption, SignedParts, Signing};
 
 final readonly class RedirectSender
 {
@@ -242,14 +242,15 @@ final readonly class PostSender
 
     /**
      * The form the browser posts: the response's Destination as its action, then SAMLResponse, and RelayState when
-     * given (6.4). The response, its assertion signed, the response too on request (model.md §5.7).
+     * given (6.4). The response, its assertion signed, encrypted for the peer when $encryption is given, the response
+     * too on request (model.md §5.7, §6.7).
      *
      * @throws \InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
      *                                   missing (6.4 step 1), what the writer refuses so
      * @throws Exception\LimitExceeded   a base64 text longer than maxFormValueBytes, which the receiver would refuse
      * @throws \Beffroi\Xml\Core\Exception\RefusedXml what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
-    public function response(Response $response, Signing $signing, SignedParts $parts = SignedParts::Assertion, ?string $relayState = null): PostForm;
+    public function response(Response $response, Signing $signing, SignedParts $parts = SignedParts::Assertion, ?string $relayState = null, ?Encryption $encryption = null): PostForm;
 
     /** A response whose status is not Success, without assertion */
     public function failure(Response $response, ?Signing $signing, ?string $relayState = null): PostForm;
@@ -343,7 +344,7 @@ What the sender writes is what the package's own receiver reads under the same `
 `PostSender::response()`, `failure()`, `authnRequest()`, `logoutRequest()` and `logoutResponse()`:
 
 1. **The arguments.** Every check that needs nothing but the arguments, before anything is written or signed, as in 6.3 step 1: a `RelayState` empty or longer than 1 024 bytes (B-9); an `AuthnRequest` or a `Response` without `Destination`, the form's `action`, which its writer refuses too (M-15): `\InvalidArgumentException`. The `Destination` is not read further: the fields travel in the body of the post, and a query the `action` holds is never read by the package's receiver, unlike the query of a URL of HTTP-Redirect (6.3 step 1).
-2. **The document.** The model's writer with the `Signing` given: `ResponseWriter::write()` or `writeFailure()`, `AuthnRequestWriter::write()`, `LogoutRequestWriter::write()` or `LogoutResponseWriter::write()`, signed in XML (B-12; model.md §6.6).
+2. **The document.** The model's writer with the `Signing` given, and for `response()` the `Encryption` given, which the sender hands over and reads nothing of: `ResponseWriter::write()` or `writeFailure()`, `AuthnRequestWriter::write()`, `LogoutRequestWriter::write()` or `LogoutResponseWriter::write()`, signed in XML (B-12; model.md §6.6).
 3. **The bytes.** `Serializer::serialize()` once (B-10), base64 without line breaks, no DEFLATE; a text longer than `maxFormValueBytes`, which the package's receiver would refuse (6.2 step 2), is `LimitExceeded` (B-7).
 4. **The form.** `PostForm` with the message's `Destination` as `action`, and the fields `SAMLRequest` or `SAMLResponse`, then `RelayState` when given, as they go on the wire. Nothing is escaped for HTML: the page is the consumer's (section 6.7).
 
@@ -478,6 +479,7 @@ One case per row, a query string, a form or a call, each a variant of a valid ca
 | A `PostForm` `PostSender` writes | `SAMLResponse` or `SAMLRequest`, then `RelayState`; base64 without line breaks; nothing escaped for HTML |
 | A `SigAlg` of RSASSA-PSS with SHA-256, on a build with PHP 8.5 and OpenSSL 3.1, and on PHP 8.4 | accepted; `AlgorithmUnavailable` (dsig.md §5.1) |
 | Every `BindingRefused` message | ends with the rule in parentheses, carries no value of the input (B-11) |
+| A response `PostSender` writes with the model's `Encryption` | its `SAMLResponse` holds a `saml:EncryptedAssertion` and no `saml:Assertion`, the form otherwise as without it (model.md §6.7) |
 
 ### 9.4 Real query strings and forms
 
@@ -586,7 +588,7 @@ Not built, not planned here, and not added without a change of this document:
 - The Artifact binding and the Artifact Resolution profile, SOAP, PAOS and the Enhanced Client or Proxy profile; the HTTP-POST-SimpleSign binding; the URI binding; a `SAMLEncoding` other than DEFLATE.
 - HttpFoundation's `Request` and `Response`, PSR-7, the routes, the templates and the page of 6.7, the content security policy, the cookies and the session, the caching headers, the tenants, the requests sent and their state, the generation and the storage of `RelayState` (`beffroi/saml`, section 6.8).
 - Everything SAML: the strict reading, the validity rules, `Destination` compared with the URL of arrival, the clock, replay (`saml2-model`).
-- Encryption (sub-spike 9e): an encrypted assertion over HTTP-POST is bytes to this package and the model's to read.
+- Encryption: an encrypted assertion over HTTP-POST is bytes to this package, the model's to write and to read; `PostSender::response()` passes the model's `Encryption` to its writer and never names a class of `Enc`.
 - The publication, fetching and refreshing of metadata; discovery.
 - SAML 1.x, WS-Federation.
 
