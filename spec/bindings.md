@@ -210,7 +210,7 @@ Each also carries `relayState` and `binding`. The `validate()` of `ReceivedLogou
 namespace Beffroi\Saml2\Bindings;
 
 use Beffroi\Saml2\Model\Protocol\{AuthnRequest, LogoutRequest, LogoutResponse, Response};
-use Beffroi\Saml2\Model\Writing\{SignedParts, Signing};
+use Beffroi\Saml2\Model\Writing\{Encryption, SignedParts, Signing};
 
 final readonly class RedirectSender
 {
@@ -242,7 +242,8 @@ final readonly class PostSender
 
     /**
      * The form the browser posts: the response's Destination as its action, then SAMLResponse, and RelayState when
-     * given (6.4). The response, its assertion signed, the response too on request (model.md §5.7).
+     * given (6.4). The response, its assertion signed, encrypted for the peer when $encryption is given, the response
+     * too on request (model.md §5.7, §6.7).
      *
      * @throws \InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
      *                                   missing or whose scheme is neither http nor https (6.4 step 1), what the
@@ -250,7 +251,7 @@ final readonly class PostSender
      * @throws Exception\LimitExceeded   a base64 text longer than maxFormValueBytes, which the receiver would refuse
      * @throws \Beffroi\Xml\Core\Exception\RefusedXml what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
      */
-    public function response(Response $response, Signing $signing, SignedParts $parts = SignedParts::Assertion, ?string $relayState = null): PostForm;
+    public function response(Response $response, Signing $signing, SignedParts $parts = SignedParts::Assertion, ?string $relayState = null, ?Encryption $encryption = null): PostForm;
 
     /** A response whose status is not Success, without assertion */
     public function failure(Response $response, ?Signing $signing, ?string $relayState = null): PostForm;
@@ -344,7 +345,7 @@ What the sender writes is what the package's own receiver reads under the same `
 `PostSender::response()`, `failure()`, `authnRequest()`, `logoutRequest()` and `logoutResponse()`:
 
 1. **The arguments.** Every check that needs nothing but the arguments, before anything is written or signed, as in 6.3 step 1: a `RelayState` empty or longer than 1 024 bytes (B-9); an `AuthnRequest` or a `Response` without `Destination`, the form's `action`, which its writer refuses too (M-15); a `Destination` whose scheme is neither `http` nor `https`, which would be the `action` the browser submits the form to, a `javascript:` action running script in the origin of the page: `\InvalidArgumentException`. The scheme is read as in 6.3 step 1, case included (RFC 3986 §3.1), the value kept as it is. The `Destination` is not read further: the fields travel in the body of the post, and a query or a fragment the `action` holds is never read by the package's receiver, unlike the query of a URL of HTTP-Redirect (6.3 step 1).
-2. **The document.** The model's writer with the `Signing` given: `ResponseWriter::write()` or `writeFailure()`, `AuthnRequestWriter::write()`, `LogoutRequestWriter::write()` or `LogoutResponseWriter::write()`, signed in XML (B-12; model.md §6.6).
+2. **The document.** The model's writer with the `Signing` given, and for `response()` the `Encryption` given, which the sender hands over and reads nothing of: `ResponseWriter::write()` or `writeFailure()`, `AuthnRequestWriter::write()`, `LogoutRequestWriter::write()` or `LogoutResponseWriter::write()`, signed in XML (B-12; model.md §6.6).
 3. **The bytes.** `Serializer::serialize()` once (B-10), base64 without line breaks, no DEFLATE; a text longer than `maxFormValueBytes`, which the package's receiver would refuse (6.2 step 2), is `LimitExceeded` (B-7).
 4. **The form.** `PostForm` with the message's `Destination` as `action`, and the fields `SAMLRequest` or `SAMLResponse`, then `RelayState` when given, as they go on the wire. Nothing is escaped for HTML: the page is the consumer's (section 6.7).
 
@@ -388,7 +389,7 @@ The package carries one message across one binding against what the consumer sta
 - **The binding of each message.** The peer's metadata says it: HTTP-Redirect or HTTP-POST, by the `Binding` of the endpoint the message goes to (`Metadata\Binding`). The metadata `beffroi/saml` publishes lists both for its single sign-on service (model.md §6.9).
 - **The HTTP answer.** For HTTP-Redirect, a `302` or `303` whose `Location` is the URL `RedirectSender` returned (Bindings §3.4.4); for HTTP-POST, the page of 6.7; both with `Cache-Control: no-cache, no-store` and `Pragma: no-cache` (Bindings §3.4.5.1, §3.5.5.1).
 - **The cross-site post.** The post to an assertion consumer service or a single logout service comes from the peer's site: a session cookie set `SameSite=Lax` or `Strict` does not arrive with it, so the state of the request sent is found by its `InResponseTo` or its `RelayState`, not by that cookie.
-- **A logout message seen twice.** A signed HTTP-Redirect URL of a logout message, captured, verifies again while the message's window is open: the package holds no state and remembers nothing, and the model remembers the assertions of responses only (model.md §6.9, §12). Until the maintainer decides that open item of the model, `beffroi/saml` forgets the `ID` of a `LogoutRequest` once it has answered it, and treats ending a session it already ended as done.
+- **A logout message seen twice.** A signed HTTP-Redirect URL of a logout message, captured, verifies again while the message's window is open: the package holds no state and remembers nothing, and the model refuses it, `Replayed`, through the replay port the consumer hands the two logout validators it constructs (model.md M-11, §6.9), the store shared by its workers and atomic.
 - **A refusal.** The package refuses; what the browser then sees is `beffroi/saml`'s page. A request refused before its endpoint is established gets no SAML answer (model.md §6.2).
 
 ## 7. Limits
@@ -479,6 +480,7 @@ One case per row, a query string, a form or a call, each a variant of a valid ca
 | A `PostForm` `PostSender` writes | `SAMLResponse` or `SAMLRequest`, then `RelayState`; base64 without line breaks; nothing escaped for HTML |
 | A `SigAlg` of RSASSA-PSS with SHA-256, on a build with PHP 8.5 and OpenSSL 3.1, and on PHP 8.4 | accepted; `AlgorithmUnavailable` (dsig.md §5.1) |
 | Every `BindingRefused` message | ends with the rule in parentheses, carries no value of the input (B-11) |
+| A response `PostSender` writes with the model's `Encryption` | its `SAMLResponse` holds a `saml:EncryptedAssertion` and no `saml:Assertion`, the form otherwise as without it (model.md §6.7) |
 
 ### 9.4 Real query strings and forms
 
@@ -588,7 +590,7 @@ Not built, not planned here, and not added without a change of this document:
 - The Artifact binding and the Artifact Resolution profile, SOAP, PAOS and the Enhanced Client or Proxy profile; the HTTP-POST-SimpleSign binding; the URI binding; a `SAMLEncoding` other than DEFLATE.
 - HttpFoundation's `Request` and `Response`, PSR-7, the routes, the templates and the page of 6.7, the content security policy, the cookies and the session, the caching headers, the tenants, the requests sent and their state, the generation and the storage of `RelayState` (`beffroi/saml`, section 6.8).
 - Everything SAML: the strict reading, the validity rules, `Destination` compared with the URL of arrival, the clock, replay (`saml2-model`).
-- Encryption (sub-spike 9e): an encrypted assertion over HTTP-POST is bytes to this package and the model's to read.
+- Encryption: an encrypted assertion over HTTP-POST is bytes to this package, the model's to write and to read; `PostSender::response()` passes the model's `Encryption` to its writer and never names a class of `Enc`.
 - The publication, fetching and refreshing of metadata; discovery.
 - SAML 1.x, WS-Federation.
 
@@ -611,7 +613,7 @@ Each item is marked **decided**, with the date and who decided it; **open**, wit
 - **The page that posts the form.** Decided by the maintainer's brief: `beffroi/saml`'s (section 6.7), no renderer in the package.
 - **SimpleSAMLphp and Keycloak in the CI.** Decided on 30 September 2026 for `saml2-model`, and the same here: never; run by hand, captures committed.
 - **The model's harness.** Left, an issue on `saml2-model` opened with the maintainer's agreement once this package is green: its scripts play the binding by hand, and could call this package instead, as this package's judge, green against SimpleSAMLphp and Keycloak since 1 October 2026, does with the same installations.
-- **A logout message seen twice.** Open, the maintainer's, on `saml2-model` (model.md §12): whether the model remembers the issuer and `ID` of a logout message through its replay port. Nothing is built here either way: the package holds no state (section 6.8).
+- **A logout message seen twice.** Answered on 14 October 2026 on `saml2-model` (model.md §12, beffroi-php/beffroi#708) and built on 15 October 2026 by beffroi-php/beffroi#734: the model remembers the issuer and `ID` of a logout message through its replay port, which the two logout validators the consumer hands `validate()` take in their constructor. Nothing is built here: the package holds no state (section 6.8).
 - **A `LogoutResponse` from Keycloak over HTTP-Redirect.** Obtained by the judge on 1 October 2026: realm `idp` forces HTTP-POST by default; with its client's "Force POST binding" off and the redirect logout URL its converter draws from metadata listing the single logout service for HTTP-Redirect, it answers a `LogoutRequest` received over HTTP-Redirect over HTTP-Redirect, signed over its query string, which `RedirectReceiver` verifies and the model accepts through the binding's authentication (finding K-9 of `tests/saml2-bindings/Interop/keycloak/README.md`; the capture kept, section 9.4). Nothing left.
 - **Names PHP's parser reads as one of the six.** Decided on 1 October 2026 by the maintainer, from the adversarial pass: refused (B-1), applied on 12 October 2026 by story #11. PHP's parser of a query string decodes a name, drops its leading spaces, cuts it at a NUL and reads a `[` as an array (`php_register_variable_ex()`): `+SAMLRequest`, `%20SAMLRequest`, `SAMLRequest%00x`, `SAMLRequest[]` and `SAMLRequest%5B%5D` are `SAMLRequest` in `$_GET`, measured with the `parse_str()` of PHP 8.5.10 and 8.4.25 by the adversarial pass on 1 October 2026 (section 9.8) and of PHP 8.5.11 and 8.4.25 on 12 October 2026; the package skipped them as any other parameter, so that a consumer reading `$request->query` as well, which section 6.8 forbids, saw a parameter the package did not read. Section 6.1 step 2 now reads a name as that parser does, cut at a `[` no `]` follows as well, which PHP reads as `_`, and refuses one read as one of the six while it was not written so (`MalformedParameters`); section 6.3 step 1 refuses it in the query of a `Destination`, as the receiver would (`\InvalidArgumentException`). Past `max_input_vars` parameters, 1 000 by default, PHP stops reading and `$_GET` lacks a message the package reads: that stays the consumer's, who reads the query string through the package alone (section 6.8).
 - **A received message assembled outside its scope.** Decided on 1 October 2026 by the maintainer, from the adversarial pass: banned in `beffroi/saml`, next to `validateAuthenticatedByBinding()` (section 6.8). The guarantee of section 5.2 holds for code that keeps the visibility PHP gives it: a closure bound to the scope of `Internal\Reception` (`Closure::bind()`), or Reflection (`ReflectionProperty::setValue()` on a `Reception` made by `newInstanceWithoutConstructor()`, a lazy ghost), builds a `Reception` holding the message of one query string and the signature of another, which `validate()` accepts through the binding's authentication; measured by the adversarial pass on 1 October 2026, Reflection outside the suite, whose PHPStan rules ban it (section 8). The package cannot close it, as it cannot close a call of `validateAuthenticatedByBinding()` by the consumer: both are the consumer's word. The PHPStan configuration of `beffroi/saml` bans `Closure::bind()`, `Closure::bindTo()`, `Closure::call()` and Reflection on the classes of `Beffroi\Saml2\Bindings\Internal\`. Nothing changes here. Left: those rules, in the issue of `beffroi/saml` that holds the ban of `validateAuthenticatedByBinding()`, when sub-spike 9c opens.

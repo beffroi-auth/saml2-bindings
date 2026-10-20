@@ -12,6 +12,7 @@ use Beffroi\Saml2\Model\Protocol\LogoutRequest;
 use Beffroi\Saml2\Model\Protocol\LogoutResponse;
 use Beffroi\Saml2\Model\Protocol\Response;
 use Beffroi\Saml2\Model\Writing\AuthnRequestWriter;
+use Beffroi\Saml2\Model\Writing\Encryption;
 use Beffroi\Saml2\Model\Writing\LogoutRequestWriter;
 use Beffroi\Saml2\Model\Writing\LogoutResponseWriter;
 use Beffroi\Saml2\Model\Writing\ResponseWriter;
@@ -53,17 +54,20 @@ final readonly class PostSender
 
     /**
      * The form the browser posts: the response's Destination as its action, then SAMLResponse, and RelayState when
-     * given (section 6.4). The response, its assertion signed, the response too on request (model.md section 5.7).
+     * given (section 6.4). The response, its assertion signed, encrypted for the peer when $encryption is given, the
+     * response too on request (model.md sections 5.7 and 6.7).
      *
      * @param Signing     $signing    the identity provider's
      * @param SignedParts $parts      the assertion alone by default, or the response too
      * @param ?string     $relayState opaque, at most 1 024 bytes, never empty, the one the request carried (B-9)
+     * @param ?Encryption $encryption the model's, handed to its writer and read by nothing here (section 11)
      *
      * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
      *                                  missing or whose scheme is neither http nor https (section 6.4 step 1), what
      *                                  the writer refuses so
      * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable,
+     *                                  and what Enc refuses while encrypting
      */
     public function response(
         Response $response,
@@ -71,11 +75,12 @@ final readonly class PostSender
         Signing $signing,
         SignedParts $parts = SignedParts::Assertion,
         ?string $relayState = null,
+        ?Encryption $encryption = null,
     ): PostForm {
         $destination = $this->arguments($response->destination, 'Response', $relayState);
 
         return $this->form(
-            new ResponseWriter()->write($response, $signing, $parts),
+            new ResponseWriter()->write($response, $signing, $parts, $encryption),
             'SAMLResponse',
             $destination,
             $relayState,
