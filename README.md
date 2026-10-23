@@ -1,11 +1,11 @@
 # beffroi/saml2-bindings
 
-Part of [beffroi/framework](https://github.com/beffroi-php/beffroi), developed in `src/saml2-bindings` of that monorepo; this repository is
+Part of [beffroi/framework](https://github.com/beffroi-auth/beffroi), developed in `src/saml2-bindings` of that monorepo; this repository is
 its read-only split. Issues and pull requests go to the monorepo.
 
 The two browser bindings of SAML 2.0 for PHP, HTTP-Redirect and HTTP-POST, on
-[`beffroi/saml2-model`](https://github.com/beffroi-php/saml2-model) and
-[`beffroi/xml-security`](https://github.com/beffroi-php/xml-security): a query string or a form decoded into the
+[`beffroi/saml2-model`](https://github.com/beffroi-auth/saml2-model) and
+[`beffroi/xml-security`](https://github.com/beffroi-auth/xml-security): a query string or a form decoded into the
 document the model reads, the detached signature of HTTP-Redirect verified over the octets the sender signed and
 nothing else, and a message the model writes turned into a URL or a form's fields. It works on strings and arrays,
 never on an HTTP request, and reads no SAML element: which message it expects is the method you call.
@@ -159,9 +159,9 @@ suite on PHP 8.5 and on PHP 8.4.
 
 ## Security
 
-See the [security policy](https://github.com/beffroi-php/beffroi/blob/0.0.x/SECURITY.md) of the monorepo: private reporting, an advisory and a CVE for
+See the [security policy](https://github.com/beffroi-auth/beffroi/blob/0.0.x/SECURITY.md) of the monorepo: private reporting, an advisory and a CVE for
 every fix.
 
 ## License
 
-MIT, see the [LICENSE](https://github.com/beffroi-php/beffroi/blob/0.0.x/LICENSE) of the monorepo.
+MIT, see the [LICENSE](https://github.com/beffroi-auth/beffroi/blob/0.0.x/LICENSE) of the monorepo.
