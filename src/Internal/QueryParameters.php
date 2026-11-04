@@ -22,31 +22,14 @@ use function strlen;
 use function substr;
 
 /**
- * The parameters of a query string received over HTTP-Redirect, read in the order of section 6.1, steps 2 to 7, before
- * anything decodes the message: the six parameters the binding reads, each at most once and under its literal name
- * (B-1), exactly one message parameter, the one the method takes (B-1), SAMLEncoding absent or DEFLATE (section 8),
- * SigAlg and Signature both or neither, SigAlg on the closed list of D-5 (B-3), the text of Signature bounded then
- * decoded (B-7, B-8), RelayState decoded and bounded (B-9), and the octets the signature covers (B-2).
+ * Section 6.1 steps 2 to 7, B-1, B-2, B-3, B-7, B-8, B-9
  *
- * Every value is kept as the substring of the query string exactly as it arrived; the message is the one raw value the
- * signed octets hold, never another occurrence (B-1, B-2). A name is read as PHP's own parser of a query string reads
- * it, percent-decoded, its leading spaces dropped, cut at its first NUL or "[": one that reads so as one of the six
- * while it is not written so is refused, so that a consumer reading the query string through that parser too never
- * sees a parameter the package did not read (B-1). Any other parameter, the query of a Location among them, is skipped
- * once its name is decoded, its value decoded no further and never signed (SAML Bindings §3.4.4.1).
- *
- * @internal outside the compatibility promise of section 5
+ * @internal
  */
 final readonly class QueryParameters
 {
-    /**
-     * The one value of SAMLEncoding the package reads (SAML Bindings §3.4.4.1).
-     */
     public const string DEFLATE = 'urn:oasis:names:tc:SAML:2.0:bindings:URL-Encoding:DEFLATE';
 
-    /**
-     * The six parameters of B-1, the only ones the binding reads.
-     */
     private const array PARAMETERS = [
         'SAMLRequest',
         'SAMLResponse',
@@ -57,22 +40,19 @@ final readonly class QueryParameters
     ];
 
     /**
-     * B-9: 1 024 bytes once decoded, a named and bounded exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3
-     * (section 8).
+     * B-9: a named exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3.
      */
     private const int MAX_RELAY_STATE_BYTES = 1_024;
 
     /**
-     * The base64 of 1 024 bytes, Dsig's maxSignatureValueBytes (section 7).
+     * The base64 of Dsig's maxSignatureValueBytes, 1 024 bytes.
      */
     private const int MAX_SIGNATURE_CHARACTERS = 1_368;
 
     /**
-     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter the message parameter the query string carries
-     * @param string                       $message          its value, as it arrived, still percent-encoded
-     * @param ?string                      $relayState       RelayState, decoded, or null when the query string has none
-     * @param ?DetachedSignature           $signature        the detached signature, or null when the query string is
-     *                                                       unsigned
+     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter
+     * @param string                       $message          still percent-encoded
+     * @param ?string                      $relayState       decoded
      */
     private function __construct(
         public string $messageParameter,
@@ -83,20 +63,15 @@ final readonly class QueryParameters
     }
 
     /**
-     * Section 6.1 steps 2 to 7, in their order.
-     *
      * @param string                                       $queryString       the raw query string, already bounded
-     *                                                                        (section 6.1 step 1)
-     * @param non-empty-list<'SAMLRequest'|'SAMLResponse'> $messageParameters the message parameters the method takes
-     * @param Loader                                       $loader            the consumer's, which the detached
-     *                                                                        signature is verified with (step 12)
+     * @param non-empty-list<'SAMLRequest'|'SAMLResponse'> $messageParameters
      *
-     * @throws MalformedParameters       when the parameters are not those B-1 and B-3 allow
-     * @throws MalformedEncoding         when a name or a value is not in its one form (B-8), or the message is empty
-     * @throws Unsupported               when SAMLEncoding is not DEFLATE (section 8)
-     * @throws UnknownSignatureAlgorithm when SigAlg is not on the closed list (D-5, B-3)
-     * @throws LimitExceeded             when the text of Signature is longer than 1 368 characters (section 7)
-     * @throws InvalidRelayState         when RelayState is empty or longer than 1 024 bytes (B-9)
+     * @throws MalformedParameters
+     * @throws MalformedEncoding
+     * @throws Unsupported
+     * @throws UnknownSignatureAlgorithm
+     * @throws LimitExceeded
+     * @throws InvalidRelayState
      */
     public static function read(string $queryString, array $messageParameters, Loader $loader): self
     {
@@ -112,16 +87,12 @@ final readonly class QueryParameters
     }
 
     /**
-     * Section 6.1 step 2: the parameter of B-1 a name of a query string reads as, as PHP's own parser of a query string
-     * reads it (php_register_variable_ex()): percent-decoded under B-8, its leading spaces dropped, cut at its first
-     * NUL or "[". Null when it reads as none of the six. The sender reads the query of a Destination with it, as the
-     * receiver will (section 6.3 step 1).
+     * Section 6.1 step 2
      *
-     * @param string $name a name as it arrived, still percent-encoded
+     * Reads a name as php_register_variable_ex() does, so that a consumer reading the query string through PHP's parser
+     * never sees a parameter the package did not read (B-1).
      *
-     * @return ?string one of the six parameters of B-1, or null
-     *
-     * @throws MalformedEncoding when the name holds a malformed percent-escape (B-8)
+     * @throws MalformedEncoding
      */
     public static function parameterNamed(string $name): ?string
     {
@@ -132,15 +103,12 @@ final readonly class QueryParameters
     }
 
     /**
-     * Step 2: the raw value of each of the six parameters of B-1 the query string carries. Split on & alone, a ; being
-     * a character of a value; each segment split on its first =; its name read as parameterNamed() reads it. An empty
-     * segment has an empty name, which is none of the six, and is skipped as any other parameter is.
+     * Section 6.1 step 2
      *
-     * @return array<string, string>
+     * @return array<string, string> the raw value of each parameter, by name
      *
-     * @throws MalformedEncoding   when a name holds a malformed percent-escape (B-8)
-     * @throws MalformedParameters when one of the six is named otherwise than as written, has no =, or appears twice
-     *                             (B-1)
+     * @throws MalformedEncoding
+     * @throws MalformedParameters
      */
     private static function parameters(string $queryString): array
     {
@@ -168,15 +136,15 @@ final readonly class QueryParameters
     }
 
     /**
-     * Step 3: exactly one of SAMLRequest and SAMLResponse, one the method takes, not empty.
+     * Section 6.1 step 3
      *
      * @param array<string, string>                        $parameters
      * @param non-empty-list<'SAMLRequest'|'SAMLResponse'> $accepted
      *
      * @return array{'SAMLRequest'|'SAMLResponse', string} the message parameter and its raw value
      *
-     * @throws MalformedParameters when the query string carries both, neither, or one the method does not take (B-1)
-     * @throws MalformedEncoding   when its value is empty
+     * @throws MalformedParameters
+     * @throws MalformedEncoding when the value is empty
      */
     private static function message(array $parameters, array $accepted): array
     {
@@ -201,17 +169,15 @@ final readonly class QueryParameters
     }
 
     /**
-     * Steps 5 and 7: SigAlg and Signature both or neither; SigAlg, percent-decoded, on the closed list of D-5, before
-     * the message is decoded; the text of Signature, percent-decoded, bounded, then decoded as base64 without
-     * whitespace; and the octets of B-2 from the raw values.
+     * Section 6.1 steps 5 and 7
      *
      * @param array<string, string>        $parameters
      * @param 'SAMLRequest'|'SAMLResponse' $messageParameter
      *
-     * @throws MalformedParameters       when one of SigAlg and Signature is present without the other (B-3)
-     * @throws UnknownSignatureAlgorithm when SigAlg is not on the closed list (D-5)
-     * @throws MalformedEncoding         when a value is not in its one form (B-8)
-     * @throws LimitExceeded             when the text of Signature is longer than 1 368 characters (section 7)
+     * @throws MalformedParameters
+     * @throws UnknownSignatureAlgorithm
+     * @throws MalformedEncoding
+     * @throws LimitExceeded
      */
     private static function signature(
         array $parameters,
@@ -235,10 +201,10 @@ final readonly class QueryParameters
     }
 
     /**
-     * Step 5: the text of Signature, percent-decoded, at most the base64 of 1 024 bytes, then decoded under B-8.
+     * Section 6.1 step 5
      *
-     * @throws LimitExceeded     when the text is longer than 1 368 characters (section 7)
-     * @throws MalformedEncoding when it is empty or not base64 in its one form without whitespace (B-8)
+     * @throws LimitExceeded
+     * @throws MalformedEncoding
      */
     private static function signatureValue(string $raw): string
     {
@@ -254,10 +220,10 @@ final readonly class QueryParameters
     }
 
     /**
-     * Step 6: RelayState, when present, percent-decoded, neither empty nor longer than 1 024 bytes, kept as decoded.
+     * Section 6.1 step 6
      *
-     * @throws MalformedEncoding when it holds a malformed percent-escape (B-8)
-     * @throws InvalidRelayState when it is empty or longer than 1 024 bytes (B-9)
+     * @throws MalformedEncoding
+     * @throws InvalidRelayState
      */
     private static function relayState(?string $raw): ?string
     {

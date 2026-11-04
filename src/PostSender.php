@@ -27,47 +27,28 @@ use function sprintf;
 use function strlen;
 
 /**
- * HTTP-POST sent, in the order of section 6.4 (section 5.3): first every check that needs nothing but the arguments,
- * the RelayState (B-9) and the message's Destination, the form's action, so that the signing key is never called for a
- * form the sender refuses for them; then the message written and signed in XML by the model's writer with the Signing
- * given (B-12), serialized once by Core's Serializer (B-10), base64-encoded on one line, never deflated (B-8), and
- * bounded as the receiver bounds it (B-7); then the form, the Destination as its action, the message field and
- * RelayState, nothing escaped for HTML (section 6.7). What it writes, the package's receiver reads under the same
- * BindingLimits. Only what the profiles let travel signed: the response's assertion always, and the two logout messages
- * (B-12).
+ * Section 6.4
+ *
+ * The arguments are checked first, so that the signing key is never called for a form the sender then refuses.
  */
 final readonly class PostSender
 {
     /**
-     * B-9: 1 024 bytes once decoded, a named and bounded exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3
-     * (section 8).
+     * B-9: a named exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3.
      */
     private const int MAX_RELAY_STATE_BYTES = 1_024;
 
-    /**
-     * @param BindingLimits $limits maxFormValueBytes, the bound of the receiver the form is written for (section 7)
-     */
     public function __construct(
         private BindingLimits $limits = new BindingLimits(),
     ) {
     }
 
     /**
-     * The form the browser posts: the response's Destination as its action, then SAMLResponse, and RelayState when
-     * given (section 6.4). The response, its assertion signed, encrypted for the peer when $encryption is given, the
-     * response too on request (model.md sections 5.7 and 6.7).
+     * @param ?string $relayState the one the request carried, at most 1 024 bytes, never empty (B-9)
      *
-     * @param Signing     $signing    the identity provider's
-     * @param SignedParts $parts      the assertion alone by default, or the response too
-     * @param ?string     $relayState opaque, at most 1 024 bytes, never empty, the one the request carried (B-9)
-     * @param ?Encryption $encryption the model's, handed to its writer and read by nothing here (section 11)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing or whose scheme is neither http nor https (section 6.4 step 1), what
-     *                                  the writer refuses so
-     * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable,
-     *                                  and what Enc refuses while encrypting
+     * @throws InvalidArgumentException for a RelayState outside B-9 or a Destination that is not an http or https URL
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function response(
         Response $response,
@@ -88,16 +69,11 @@ final readonly class PostSender
     }
 
     /**
-     * The same, a response whose status is not Success, without assertion, signed when $signing is given (SAML
-     * Profiles §4.1.4.2).
+     * @param ?string $relayState the one the request carried, at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?string $relayState opaque, at most 1 024 bytes, never empty, the one the request carried (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing or whose scheme is neither http nor https (section 6.4 step 1), what
-     *                                  the writer refuses so
-     * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9 or a Destination that is not an http or https URL
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function failure(
         Response $response,
@@ -116,16 +92,12 @@ final readonly class PostSender
     }
 
     /**
-     * The same, an AuthnRequest in SAMLRequest, signed when $signing is given.
+     * @param ?Signing $signing    null only when neither party's metadata wants the request signed
+     * @param ?string  $relayState at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?Signing $signing    the service provider's, or null for a request neither party's metadata wants signed
-     *                             (section 5.3)
-     * @param ?string  $relayState opaque, at most 1 024 bytes, never empty (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing or whose scheme is neither http nor https (section 6.4 step 1)
-     * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9 or a Destination that is not an http or https URL
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function authnRequest(
         AuthnRequest $request,
@@ -144,14 +116,11 @@ final readonly class PostSender
     }
 
     /**
-     * The same, a LogoutRequest in SAMLRequest, always signed (B-12, SAML Profiles §4.4.4.1).
+     * @param ?string $relayState at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, what the writer
-     *                                  refuses so
-     * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function logoutRequest(
         LogoutRequest $request,
@@ -170,13 +139,11 @@ final readonly class PostSender
     }
 
     /**
-     * The same, a LogoutResponse in SAMLResponse, always signed (B-12, SAML Profiles §4.4.4.1).
+     * @param ?string $relayState the one the request carried, at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?string $relayState opaque, at most 1 024 bytes, never empty, the one the request carried (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9
-     * @throws LimitExceeded            a base64 text longer than maxFormValueBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function logoutResponse(
         LogoutResponse $response,
@@ -195,15 +162,13 @@ final readonly class PostSender
     }
 
     /**
-     * Step 1, what needs nothing but the arguments, before anything is written or signed: the Destination, the form's
-     * action, an http or an https URL, then the RelayState, when given, neither empty nor longer than 1 024 bytes (B-9).
+     * Section 6.4 step 1
      *
-     * @param ?string $destination the message's Destination
-     * @param string  $message     the name of the message, for the refusal
+     * @param string $message the name of the message, for the refusal
      *
      * @return string the Destination
      *
-     * @throws InvalidArgumentException a programming error of the caller
+     * @throws InvalidArgumentException
      */
     private function arguments(?string $destination, string $message, ?string $relayState): string
     {
@@ -230,12 +195,9 @@ final readonly class PostSender
     }
 
     /**
-     * Steps 3 and 4: the document the writer returned, serialized once, base64-encoded on one line and bounded as the
-     * receiver bounds it; the form on the Destination, the message field then RelayState when given.
+     * Section 6.4 steps 3 and 4
      *
-     * @param Document                     $document the message, signed in XML by its writer
-     * @param 'SAMLRequest'|'SAMLResponse' $field    the message field, as the binding names it
-     * @param string                       $action   the message's Destination
+     * @param 'SAMLRequest'|'SAMLResponse' $field
      *
      * @throws LimitExceeded
      * @throws RefusedXml

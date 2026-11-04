@@ -32,48 +32,30 @@ use function strpos;
 use function substr;
 
 /**
- * HTTP-Redirect sent, in the order of section 6.3 (section 5.3): first every check that needs nothing but the
- * arguments, the RelayState (B-9) and the message's Destination, so that the signing key is never called for a URL the
- * sender then refuses; then the message written by the model's writer with no Signing, so that it carries no XML
- * signature (B-6), serialized once by Core's Serializer (B-10) and bounded as the receiver bounds it once inflated
- * (B-7), raw-deflated, base64-encoded on one line and percent-encoded in uppercase hexadecimal (B-8); then, when a
- * Signing is given, the octets of B-2 signed through the Dsig signing port of the Signing, and the URL built on the
- * Destination, its query bounded as the receiver bounds it. What it writes, the package's receiver reads under the same
- * BindingLimits. Only what the profiles let travel: an AuthnRequest, signed or not, and the two logout messages, always
- * signed; no method sends a Response (B-12).
+ * Section 6.3, B-6
+ *
+ * The arguments are checked first, so that the signing key is never called for a URL the sender then refuses.
  */
 final readonly class RedirectSender
 {
     /**
-     * B-9: 1 024 bytes once decoded, a named and bounded exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3
-     * (section 8).
+     * B-9: a named exception to the 80 bytes of SAML Bindings §3.4.3 and §3.5.3.
      */
     private const int MAX_RELAY_STATE_BYTES = 1_024;
 
-    /**
-     * @param BindingLimits $limits maxInflatedBytes and maxQueryStringBytes, the bounds of the receiver the URL is
-     *                              written for (section 7)
-     */
     public function __construct(
         private BindingLimits $limits = new BindingLimits(),
     ) {
     }
 
     /**
-     * The URL the browser is sent to: the request's Destination, then SAMLRequest, RelayState when given, and SigAlg
-     * and Signature when $signing is given, in that order (B-2). The model's writer is called without signing (B-6).
+     * @param ?Signing $signing    null only when neither party's metadata wants the request signed
+     * @param ?string  $relayState at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?Signing $signing    the service provider's, or null for a request neither party's metadata wants signed
-     *                             (section 5.3)
-     * @param ?string  $relayState opaque, at most 1 024 bytes, never empty (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination
-     *                                  missing, whose scheme is neither http nor https, or holding a fragment or a
-     *                                  query the receiver would refuse (section 6.3 step 1), what the writer refuses
-     *                                  so
-     * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
-     *                                  than maxQueryStringBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9, or a Destination that is not an http or https
+     *                                  URL, holds a fragment, or holds a query the receiver would refuse
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function authnRequest(
         AuthnRequest $request,
@@ -96,16 +78,12 @@ final readonly class RedirectSender
     }
 
     /**
-     * The same, a LogoutRequest in SAMLRequest, always signed (B-12, SAML Profiles §4.4.4.1).
+     * @param ?string $relayState at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination whose
-     *                                  scheme is neither http nor https, or that holds a fragment or a query the
-     *                                  receiver would refuse (section 6.3 step 1), what the writer refuses so
-     * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
-     *                                  than maxQueryStringBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9, or a Destination that is not an http or https
+     *                                  URL, holds a fragment, or holds a query the receiver would refuse
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function logoutRequest(
         LogoutRequest $request,
@@ -126,16 +104,12 @@ final readonly class RedirectSender
     }
 
     /**
-     * The same, a LogoutResponse in SAMLResponse, always signed (B-12, SAML Profiles §4.4.4.1).
+     * @param ?string $relayState at most 1 024 bytes, never empty (B-9)
      *
-     * @param ?string $relayState opaque, at most 1 024 bytes, never empty (B-9)
-     *
-     * @throws InvalidArgumentException a programming error of the caller: a RelayState outside B-9, a Destination whose
-     *                                  scheme is neither http nor https, or that holds a fragment or a query the
-     *                                  receiver would refuse (section 6.3 step 1)
-     * @throws LimitExceeded            a serialized message longer than maxInflatedBytes, or a query string longer
-     *                                  than maxQueryStringBytes, which the receiver would refuse
-     * @throws RefusedXml               what Core's Serializer refuses, Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws InvalidArgumentException for a RelayState outside B-9, or a Destination that is not an http or https
+     *                                  URL, holds a fragment, or holds a query the receiver would refuse
+     * @throws LimitExceeded
+     * @throws RefusedXml
      */
     public function logoutResponse(
         LogoutResponse $response,
@@ -156,12 +130,11 @@ final readonly class RedirectSender
     }
 
     /**
-     * Step 1, what needs nothing but the arguments, before anything is written or signed: the RelayState, then the
-     * Destination.
+     * Section 6.3 step 1
      *
-     * @return ?string the query the Destination already holds, without its "?", or null when it holds none
+     * @return ?string the query the Destination already holds, without its "?"
      *
-     * @throws InvalidArgumentException a programming error of the caller
+     * @throws InvalidArgumentException
      */
     private function arguments(?string $relayState, string $destination): ?string
     {
@@ -171,9 +144,7 @@ final readonly class RedirectSender
     }
 
     /**
-     * Step 1: a RelayState, when given, neither empty nor longer than 1 024 bytes (B-9).
-     *
-     * @throws InvalidArgumentException a programming error of the caller
+     * @throws InvalidArgumentException
      */
     private function checkRelayState(?string $relayState): void
     {
@@ -189,14 +160,9 @@ final readonly class RedirectSender
     }
 
     /**
-     * Steps 3 to 6: the document the writer returned, serialized once and bounded as the receiver bounds it once
-     * inflated, then deflated and encoded; the query of the binding, signed when a Signing is given; the URL on the
-     * Destination, its query bounded as the receiver bounds it.
+     * Section 6.3 steps 3 to 6
      *
-     * @param Document                     $document         the message, unsigned in XML (B-6)
-     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter the message parameter, as the binding names it
-     * @param string                       $destination      the message's Destination
-     * @param ?string                      $ownQuery         the query the Destination holds, or null (step 1)
+     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter
      *
      * @throws LimitExceeded
      * @throws RefusedXml
@@ -235,14 +201,11 @@ final readonly class RedirectSender
     }
 
     /**
-     * Steps 4 and 5: unsigned, the message parameter and RelayState when given; signed, the octets of B-2, then the
-     * signature over them by the key of the Signing, under its algorithm.
+     * Section 6.3 steps 4 and 5
      *
-     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter the message parameter, as the binding names it
-     * @param string                       $message          the message, encoded (step 3)
-     * @param ?string                      $relayState       RelayState, encoded, or null when none is given
+     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter
      *
-     * @throws RefusedXml Dsig's SigningFailed and AlgorithmUnavailable
+     * @throws RefusedXml
      */
     private function query(
         string $messageParameter,
@@ -267,13 +230,10 @@ final readonly class RedirectSender
     }
 
     /**
-     * Step 1: the Destination, an http or an https URL, and the query it already holds, without its "?", or null when
-     * it holds none. Its names are read as the receiver reads them (section 6.1 step 2): a name that reads as one of
-     * the six parameters of B-1, written so or once percent-decoded, its leading spaces dropped or cut at a NUL or a
-     * "[", or a malformed percent-escape, would be refused there, and is refused here.
+     * Section 6.3 step 1
      *
-     * @throws InvalidArgumentException when the Destination is neither an http nor an https URL, holds a fragment, or
-     *                                  holds a query the receiver would refuse
+     * @throws InvalidArgumentException when the Destination is not an http or https URL, holds a fragment, or holds
+     *                                  a query the receiver would refuse
      */
     private function ownQuery(string $destination): ?string
     {

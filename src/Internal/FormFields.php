@@ -16,24 +16,16 @@ use function sprintf;
 use function strlen;
 
 /**
- * The fields of a form received over HTTP-POST, read in the order of section 6.2, steps 1 to 3, before anything
- * decodes the message: the three fields the binding reads, each a string, never an array (B-1), no detached signature
- * (section 8), exactly one message field, the one the method takes (B-1), bounded before it is decoded (B-7), and
- * RelayState neither empty nor longer than 1 024 bytes (B-9). The consumer's parser decoded the form (section 6.8):
- * nothing here percent-decodes, and the values are kept as they were given. Any other field, a submit button for
- * instance, is skipped.
+ * Section 6.2 steps 1 to 3. The consumer's parser decoded the form: nothing here percent-decodes.
  *
- * @internal outside the compatibility promise of section 5
+ * @internal
  */
 final readonly class FormFields
 {
-    /**
-     * The three fields of B-1 a form carries, the only ones the binding reads.
-     */
     private const array FIELDS = ['SAMLRequest', 'SAMLResponse', 'RelayState'];
 
     /**
-     * The fields of HTTP-Redirect's detached signature, which a form never carries (SAML Bindings §3.5.4).
+     * SAML Bindings §3.5.4
      */
     private const array SIGNATURE_FIELDS = ['SigAlg', 'Signature'];
 
@@ -44,10 +36,8 @@ final readonly class FormFields
     private const int MAX_RELAY_STATE_BYTES = 1_024;
 
     /**
-     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter the message field the form carries
-     * @param string                       $message          its value, as the consumer's parser decoded it, still
-     *                                                       base64
-     * @param ?string                      $relayState       RelayState, as given, or null when the form has none
+     * @param 'SAMLRequest'|'SAMLResponse' $messageParameter
+     * @param string                       $message          still base64
      */
     private function __construct(
         public string $messageParameter,
@@ -57,18 +47,16 @@ final readonly class FormFields
     }
 
     /**
-     * Section 6.2 steps 1 to 3, in their order.
+     * Section 6.2 steps 1 to 3, in their order
      *
-     * @param array<array-key, mixed>                      $fields            the fields of the form, as the consumer's
-     *                                                                        parser decoded them (section 6.8)
-     * @param non-empty-list<'SAMLRequest'|'SAMLResponse'> $messageParameters the message fields the method takes
-     * @param int                                          $maxFormValueBytes the bound of the message field (section 7)
+     * @param array<array-key, mixed>                      $fields
+     * @param non-empty-list<'SAMLRequest'|'SAMLResponse'> $messageParameters
      *
-     * @throws MalformedParameters when the fields are not those B-1 allows
-     * @throws Unsupported         when SigAlg or Signature is present (section 8)
-     * @throws LimitExceeded       when the message field is longer than maxFormValueBytes (B-7)
-     * @throws MalformedEncoding   when the message field is empty (B-8)
-     * @throws InvalidRelayState   when RelayState is empty or longer than 1 024 bytes (B-9)
+     * @throws MalformedParameters
+     * @throws Unsupported       when SigAlg or Signature is present
+     * @throws LimitExceeded
+     * @throws MalformedEncoding when the message field is empty
+     * @throws InvalidRelayState when RelayState is empty or longer than 1 024 bytes
      */
     public static function read(array $fields, array $messageParameters, int $maxFormValueBytes): self
     {
@@ -79,15 +67,14 @@ final readonly class FormFields
     }
 
     /**
-     * Step 1: the three fields of B-1 the form carries, each a string; SigAlg and Signature absent; any other field
-     * skipped.
+     * Section 6.2 step 1
      *
      * @param array<array-key, mixed> $fields
      *
      * @return array<string, string>
      *
-     * @throws MalformedParameters when one of the three is not a string, an array for instance (B-1)
-     * @throws Unsupported         when SigAlg or Signature is present (section 8)
+     * @throws MalformedParameters when a field the binding reads is not a string
+     * @throws Unsupported         when SigAlg or Signature is present
      */
     private static function fields(array $fields): array
     {
@@ -112,16 +99,16 @@ final readonly class FormFields
     }
 
     /**
-     * Step 2: exactly one of SAMLRequest and SAMLResponse, one the method takes, bounded, not empty.
+     * Section 6.2 step 2
      *
      * @param array<string, string>                        $fields
      * @param non-empty-list<'SAMLRequest'|'SAMLResponse'> $accepted
      *
-     * @return array{'SAMLRequest'|'SAMLResponse', string} the message field and its value
+     * @return array{'SAMLRequest'|'SAMLResponse', string}
      *
-     * @throws MalformedParameters when the form carries both, neither, or one the method does not take (B-1)
-     * @throws LimitExceeded       when its value is longer than maxFormValueBytes (B-7)
-     * @throws MalformedEncoding   when its value is empty (B-8)
+     * @throws MalformedParameters when the form carries both, neither, or one the method does not take
+     * @throws LimitExceeded
+     * @throws MalformedEncoding   when its value is empty
      */
     private static function message(array $fields, array $accepted, int $maxFormValueBytes): array
     {
@@ -152,10 +139,9 @@ final readonly class FormFields
     }
 
     /**
-     * Step 3: RelayState, when present, neither empty nor longer than 1 024 bytes, kept as given: the consumer's parser
-     * decoded it.
+     * Section 6.2 step 3
      *
-     * @throws InvalidRelayState when it is empty or longer than 1 024 bytes (B-9)
+     * @throws InvalidRelayState when it is empty or longer than 1 024 bytes
      */
     private static function relayState(?string $relayState): ?string
     {
