@@ -18,7 +18,7 @@ else. None of the three has a tag yet: they are required at the maintenance bran
 
 ```json
 {
-    "require": {"beffroi/saml2-bindings": "0.0.x-dev"},
+    "require": {"beffroi/saml2-bindings": "0.1.x-dev"},
     "minimum-stability": "dev",
     "prefer-stable": true
 }
@@ -159,9 +159,9 @@ suite on PHP 8.5 and on PHP 8.4.
 
 ## Security
 
-See the [security policy](https://github.com/beffroi-auth/beffroi/blob/0.0.x/SECURITY.md) of the monorepo: private reporting, an advisory and a CVE for
+See the [security policy](https://github.com/beffroi-auth/beffroi/blob/0.1.x/SECURITY.md) of the monorepo: private reporting, an advisory and a CVE for
 every fix.
 
 ## License
 
-MIT, see the [LICENSE](https://github.com/beffroi-auth/beffroi/blob/0.0.x/LICENSE) of the monorepo.
+MIT, see the [LICENSE](https://github.com/beffroi-auth/beffroi/blob/0.1.x/LICENSE) of the monorepo.
